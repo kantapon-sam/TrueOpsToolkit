@@ -1,38 +1,39 @@
 # TrueOps Toolkit
 
-A Windows desktop launcher for TUAR and PROMS, with one encrypted shared account and one active tool at a time.
+A Windows desktop launcher for three PROMS tools, with one encrypted shared account and one active tool at a time.
 
-**Current version: 1.0.0** · [Download the latest release](https://github.com/kantapon-sam/TrueOpsToolkit/releases/latest) · [Changelog](CHANGELOG.md)
+**Current version: 1.0.1** · [Download the latest release](https://github.com/kantapon-sam/TrueOpsToolkit/releases/latest) · [Changelog](CHANGELOG.md)
 
 ## Get started
 
-1. Download `TrueOpsToolkit-1.0.0-windows.zip` from Releases and extract the complete folder.
+1. Download `TrueOpsToolkit-1.0.1-windows.zip` from Releases and extract the complete folder.
 2. Open `TrueOpsToolkit.jar` directly. Windows, Java 8 or later, Windows PowerShell, and Google Chrome are required. If JAR files are not associated with Java, run `java -jar TrueOpsToolkit.jar` from the extracted folder.
-3. Select **Shared account**, enter your username and password, and save. All four tools use this account.
+3. Select **Shared account**, enter your username and password, and save. All three tools use this account.
 4. Open a tool, configure its settings and request list, and review the data before starting.
 
 | Tool | Settings available in the application | Application file |
 |---|---|---|
-| Request TUAR | Server IP, login type, Excel workbook, attachments folder, background Chrome | `TrueOps-TUAR.jar` |
 | Approve PROMS | Search and description | `TrueOps-Approve.jar` |
 | Approve by Ref | Reference number, type, and description table | `TrueOps-ApproveByRef.jar` |
 | Delete Site | Reference number and deletion reason table | `TrueOps-DeleteSite.jar` |
 
-The launcher and all four tools use an English interface. Opening an individual module JAR also starts the Toolkit and uses the shared account. Application filenames stay the same between releases; the complete Toolkit uses one version number.
+The launcher and all three tools use an English interface. Opening an individual module JAR also starts the Toolkit and uses the shared account. Application filenames stay the same between releases; the complete Toolkit uses one version number. Request TUAR is now a separate application and is no longer offered in the Toolkit. The release retains a small legacy TUAR shortcut and compatibility marker so installations of 1.0.0 can update automatically. That shortcut opens the three-tool Toolkit; the TUAR implementation, dependencies, and workbook are not included.
 
 The release ZIP contains no ChromeDriver binary, `.exe`, `.bat`, or `.cmd` files, including inside bundled JARs. ChromeDriver is downloaded automatically from Google when the Toolkit starts. An internet connection is required for that first download. Java and Chrome must already be installed; their installers are not bundled.
 
 ## Accounts and settings
 
-The username and password are encrypted together using **Windows DPAPI CurrentUser** in `config/credentials.dat`. There is no separate key file, and account values are excluded from `Login.txt` and individual tool settings. Decryption requires the Windows account that saved the credentials, normally on the same computer. Programs running under that Windows account can also decrypt them. Each recipient of a distributed release should configure their own account in the application.
+The username and password are encrypted together using **Windows DPAPI CurrentUser** in `config/credentials.dat`. There is no separate key file, and account values are excluded from `settings.csv` and individual tool settings. Decryption requires the Windows account that saved the credentials, normally on the same computer. Programs running under that Windows account can also decrypt them. Each recipient of a distributed release should configure their own account in the application.
 
 Edit the account from the launcher or the **Shared account settings** button in a tool. Every tool uses the latest saved account. When editing, leave the password empty to retain the saved password, or remove the saved account before configuring a new one. If the account file cannot be read, the tool stops before signing in and asks you to configure the shared account again.
 
-When importing settings from the original standalone tools, the Toolkit checks existing accounts in this order: Approve PROMS, Approve by Ref, Delete Site, and TUAR. It verifies that the encrypted account can be read back before removing the old account fields. Search, description, server IP, login type, and request data are retained.
+When importing settings from the original standalone PROMS tools, the Toolkit checks existing accounts in this order: Approve PROMS, Approve by Ref, and Delete Site. It verifies that the encrypted account can be read back before removing the old account fields. Search, description, and reference data are retained.
 
-The three PROMS tools provide **Save settings** and **Reload saved settings**. TUAR also provides **Save settings**. Saving settings does not start a task. Starting a PROMS task validates and saves the current settings, then requires you to select Sign in in Chrome. Search is required and supports up to two conditions separated by `&&`. The description in Approve by Ref may be empty.
+Each PROMS tool keeps Search and Description preferences in `settings.csv`. Existing `Login.txt` preferences are migrated automatically on first use. The settings file contains no account credentials.
 
-TUAR reads the selected Excel workbook and submits enabled rows when you select Run. Review the workbook first. Delete Site asks for confirmation before starting. Stopping or closing a tool does not undo actions already completed on the website.
+The three PROMS tools provide **Save settings** and **Reload saved settings**. Saving settings does not start a task. Starting a PROMS task validates and saves the current settings, then requires you to select Sign in in Chrome. Search is required and supports up to two conditions separated by `&&`. The description in Approve by Ref may be empty.
+
+Delete Site asks for confirmation before starting. Stopping or closing a tool does not undo actions already completed on the website.
 
 ## Automatic updates
 
@@ -40,7 +41,7 @@ TUAR reads the selected Excel workbook and submits enabled rows when you select 
 
 **Toolkit application:** The launcher downloads newer releases from GitHub and verifies SHA256 against the release descriptor. Installation runs after the Toolkit closes and no module is active. The updater preserves the encrypted account, settings, Excel workbooks, CSV files, attachments, ChromeDriver, and logs. **Check for updates** remains available for an additional manual check. The installed version remains usable if the network is unavailable.
 
-**ChromeDriver:** All four tools use the same `drivers/chromedriver.exe`. The Toolkit automatically checks the installed Chrome version and downloads the latest compatible driver from Google at startup and before opening Chrome. If the network is unavailable, an existing driver is used only if it is compatible, and the status is displayed. **Update ChromeDriver** remains available for an additional check while no task is open. The **Update / test Chrome** button in a PROMS tool also opens a local test page.
+**ChromeDriver:** All three tools use the same `drivers/chromedriver.exe`. The Toolkit automatically checks the installed Chrome version and downloads the latest compatible driver from Google at startup and before opening Chrome. If the network is unavailable, an existing driver is used only if it is compatible, and the status is displayed. **Update ChromeDriver** remains available for an additional check while no task is open. The **Update / test Chrome** button in a PROMS tool also opens a local test page.
 
 ## Local data
 
@@ -49,10 +50,9 @@ When built from source, runtime files are in `dist`. In a release, they are in t
 | Location | Contents |
 |---|---|
 | `config/credentials.dat` | Encrypted shared account |
-| `modules/tuar` | `requests.xlsx`, `User/settings.properties`, and `attachments`, or the paths selected in the application |
-| `modules/approve` | `Login.txt` containing only search and description settings |
-| `modules/approve-ref` | Settings, `Ref_No.csv`, and task logs |
-| `modules/delete` | Settings and `Ref_No.csv` |
+| `modules/approve` | `settings.csv` containing only search and description settings |
+| `modules/approve-ref` | `settings.csv`, `Ref_No.csv`, and task logs |
+| `modules/delete` | `settings.csv` and `Ref_No.csv` |
 | `drivers` | Shared ChromeDriver |
 | `logs` | Launcher and task logs |
 
@@ -71,7 +71,7 @@ Open the project in NetBeans and select Build / Run (F6), or run these commands 
 
 A JDK 8 or later is required. Pass `-JdkHome 'C:\path\to\jdk'` when `JAVA_HOME` does not point to the JDK you want to use. Builds use stable JAR filenames and read the version from `version.properties`. See [RELEASE.md](RELEASE.md) for versioning and GitHub release instructions.
 
-Tests use synthetic accounts to check encryption, migration, settings, updates, process locks, and all four tool windows. Chrome tests use the shared driver with each tool's Selenium libraries on local test pages. They do not sign in to production systems or submit, approve, or delete real requests. Pass `-SkipBrowsers` to skip driver downloads and Chrome startup. Reports and screenshots are written to `build/test-reports`. Connectivity to TUAR/PROMS and actual request results require separate testing against those systems.
+Tests use synthetic accounts to check encryption, migration, settings, updates, process locks, and all three tool windows. Chrome tests use the shared driver with each tool's Selenium libraries on local test pages. They do not sign in to production systems or approve or delete real requests. Pass `-SkipBrowsers` to skip driver downloads and Chrome startup. Reports and screenshots are written to `build/test-reports`. Connectivity to PROMS and actual task results require separate testing against that system.
 
 ## Source layout
 
@@ -81,4 +81,4 @@ Tests use synthetic accounts to check encryption, migration, settings, updates, 
 - `test` — Tests and generators for blank release inputs.
 - `version.properties`, `build.ps1`, `build.xml`, `release.ps1` — Version, build, and packaging configuration.
 
-Approval, deletion, and request submission retain each tool's existing workflow.
+Approval and deletion retain each tool's existing workflow.

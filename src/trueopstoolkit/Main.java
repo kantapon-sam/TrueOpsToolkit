@@ -42,7 +42,7 @@ public final class Main extends JFrame {
         super("TrueOps Toolkit v"+AppVersion.current());this.home=home;this.smokeReport=smokeReport;controller=new ProcessController(home);
         this.updates=updates;
         JPanel root=new JPanel(new BorderLayout());root.setBackground(Ui.BG);
-        root.add(Ui.header("TrueOps Toolkit", "v"+AppVersion.current()+"  /  TUAR & PROMS  /  One account for all four tools"),BorderLayout.NORTH);
+        root.add(Ui.header("TrueOps Toolkit", "v"+AppVersion.current()+"  /  PROMS  /  One account for all three tools"),BorderLayout.NORTH);
         JPanel middle=new JPanel(new BorderLayout(0,17));middle.setOpaque(false);middle.setBorder(new EmptyBorder(22,26,18,26));
         JPanel title=new JPanel(new BorderLayout());title.setOpaque(false);title.add(Ui.label("Choose a tool",18,Ui.TEXT,true),BorderLayout.WEST);
         JPanel titleActions=new JPanel(new FlowLayout(FlowLayout.RIGHT,10,0));titleActions.setOpaque(false);
@@ -50,17 +50,19 @@ public final class Main extends JFrame {
         sharedAccount.addActionListener(e -> SharedCredentialsDialog.showDialog(this,home));titleActions.add(sharedAccount);
         checkUpdate.addActionListener(e -> checkForUpdates());titleActions.add(checkUpdate);
         title.add(titleActions,BorderLayout.EAST);middle.add(title,BorderLayout.NORTH);
-        JPanel grid=new JPanel(new GridLayout(2,2,18,18));grid.setOpaque(false);
+        JPanel grid=new JPanel(new GridLayout(3,1,0,14));grid.setOpaque(false);
         int number=0;
         for(ModuleSpec m:ModuleSpec.values()) {
-            JPanel card=new JPanel(new BorderLayout(0,10));card.setBackground(Color.WHITE);
-            card.setBorder(new CompoundBorder(new LineBorder(new Color(223,230,239)),new EmptyBorder(18,20,18,20)));
+            JPanel card=new JPanel(new BorderLayout(20,0));card.setBackground(Color.WHITE);
+            card.setBorder(new CompoundBorder(new LineBorder(new Color(223,230,239)),new EmptyBorder(14,20,14,20)));
+            JPanel details=new JPanel(new BorderLayout(0,6));details.setOpaque(false);
             JPanel cardHead=new JPanel(new BorderLayout(10,0));cardHead.setOpaque(false);
             cardHead.add(Ui.label(String.format("%02d",++number),23,m.color,true),BorderLayout.WEST);
-            cardHead.add(Ui.label(m.title,19,Ui.TEXT,true),BorderLayout.CENTER);card.add(cardHead,BorderLayout.NORTH);
-            JTextArea desc=Ui.note(m.description+"\n"+(m==ModuleSpec.TUAR?"requests.xlsx":m==ModuleSpec.APPROVE?"Search / Description":"Ref_No.csv"));
-            desc.setFont(new Font("Tahoma",Font.PLAIN,14));card.add(desc,BorderLayout.CENTER);
-            JButton b=Ui.button("Open "+m.title,m.color);b.addActionListener(e -> openModule(m));buttons.put(m,b);card.add(b,BorderLayout.SOUTH);grid.add(card);
+            cardHead.add(Ui.label(m.title,19,Ui.TEXT,true),BorderLayout.CENTER);details.add(cardHead,BorderLayout.NORTH);
+            JTextArea desc=Ui.note(m.description);
+            desc.setFont(new Font("Tahoma",Font.PLAIN,14));details.add(desc,BorderLayout.CENTER);card.add(details,BorderLayout.CENTER);
+            JButton b=Ui.button("Open "+m.title,m.color);b.setPreferredSize(new Dimension(235,42));b.addActionListener(e -> openModule(m));buttons.put(m,b);
+            JPanel action=new JPanel(new GridBagLayout());action.setOpaque(false);action.add(b);card.add(action,BorderLayout.EAST);grid.add(card);
         }
         middle.add(grid,BorderLayout.CENTER);root.add(middle,BorderLayout.CENTER);
         JPanel footer=new JPanel(new BorderLayout(0,12));footer.setBorder(new EmptyBorder(0,26,20,26));footer.setOpaque(false);
@@ -70,7 +72,7 @@ public final class Main extends JFrame {
         openLog.addActionListener(e -> {if(controller.log()!=null)Ui.open(controller.log(),this);});
         updateDriver.addActionListener(e -> updateDriver());
         stop.addActionListener(e -> stopWork());actions.add(data);actions.add(updateDriver);actions.add(openLog);actions.add(stop);footer.add(actions,BorderLayout.SOUTH);
-        root.add(footer,BorderLayout.SOUTH);setContentPane(root);setSize(930,735);setMinimumSize(new Dimension(820,650));setLocationRelativeTo(null);setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        root.add(footer,BorderLayout.SOUTH);setContentPane(root);setSize(930,650);setMinimumSize(new Dimension(820,610));setLocationRelativeTo(null);setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         refreshTimer=new javax.swing.Timer(600,e -> refresh());refreshTimer.start();refresh();
         addWindowListener(new WindowAdapter(){@Override public void windowClosing(WindowEvent e){requestClose();}});
         if(smokeReport==null){startupChecking=true;checkingUpdate=true;refresh();SwingUtilities.invokeLater(() -> startStartupUpdates());}
@@ -116,7 +118,7 @@ public final class Main extends JFrame {
                 try {
                     startupMessage(false,"Checking Google Chrome and preparing the shared driver...");
                     ensureDriverSafely(message -> startupMessage(false,message));
-                    startupMessage(false,"Shared ChromeDriver is ready for all four tools.");
+                    startupMessage(false,"Shared ChromeDriver is ready for all three tools.");
                 } catch(Exception failure){result.driverFailure=failure;startupMessage(false,"Driver preparation could not finish. You can retry from the launcher.");}
                 return result;
             }
@@ -225,7 +227,7 @@ public final class Main extends JFrame {
             @Override protected Path doInBackground() throws Exception {
                 return ensureDriverSafely(message -> SwingUtilities.invokeLater(() -> status.setText(message)));
             }
-            @Override protected void done(){updatingDriver=false;refresh();try{get();JOptionPane.showMessageDialog(Main.this,"Shared ChromeDriver is ready for all four tools.\nUpdates are checked automatically before Chrome starts.");}catch(Exception ex){Ui.showError(Main.this,ex.getCause()==null?ex:ex.getCause());}}
+            @Override protected void done(){updatingDriver=false;refresh();try{get();JOptionPane.showMessageDialog(Main.this,"Shared ChromeDriver is ready for all three tools.\nUpdates are checked automatically before Chrome starts.");}catch(Exception ex){Ui.showError(Main.this,ex.getCause()==null?ex:ex.getCause());}}
         }.execute();
     }
     private void stopWork(){
@@ -247,8 +249,8 @@ public final class Main extends JFrame {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {try{instanceLock.release();instanceChannel.close();}catch(Exception ignored){}},"launcher-lock"));
         try(FileChannel channel=FileChannel.open(home.resolve(".active.lock"),StandardOpenOption.CREATE,StandardOpenOption.WRITE)) {
             FileLock migrationLock=channel.tryLock();
-            if(migrationLock!=null)try{SharedCredentialsMigration.migrate(home);}finally{migrationLock.release();}
-        } catch(IOException ex){JOptionPane.showMessageDialog(null,"Could not migrate the existing account. Open Shared account to review it.\n"+ex.getMessage(),"Shared account",JOptionPane.WARNING_MESSAGE);}
+            if(migrationLock!=null)try{SharedCredentialsMigration.migrate(home);SettingsFiles.migrate(home);}finally{migrationLock.release();}
+        } catch(IOException ex){JOptionPane.showMessageDialog(null,"Could not migrate the existing account or settings. Open Shared account or tool settings to review them.\n"+ex.getMessage(),"Account and settings",JOptionPane.WARNING_MESSAGE);}
         final ModuleSpec requested=args.length==2 && "--module".equals(args[0])?ModuleSpec.byId(args[1]):null;
         SwingUtilities.invokeLater(() -> {Main frame=new Main(home,null);frame.setVisible(true);if(requested!=null)frame.requestModule(requested);});
     }

@@ -80,7 +80,6 @@ if ($descriptor.Count -ne 4 -or $descriptor['app.version'] -cne $version -or $de
 $expected = New-Object 'System.Collections.Generic.List[string]'
 foreach ($path in @('TrueOpsToolkit.jar', 'README.md', 'CHANGELOG.md', 'RELEASE.md', 'version.properties')) { $expected.Add($path) }
 $modules = @(
-    @{Id='tuar'; Jar='TrueOps-TUAR.jar'},
     @{Id='approve'; Jar='TrueOps-Approve.jar'},
     @{Id='approve-ref'; Jar='TrueOps-ApproveByRef.jar'},
     @{Id='delete'; Jar='TrueOps-DeleteSite.jar'}
@@ -90,11 +89,11 @@ foreach ($module in $modules) {
     foreach ($library in Get-ChildItem -LiteralPath (Join-Path $root ('tools\' + $module.Id + '\lib')) -Filter '*.jar' -File | Where-Object { $_.Name -notmatch '-sources\.jar$' }) {
         $expected.Add('modules/' + $module.Id + '/lib/' + $library.Name)
     }
-    if ($module.Id -ne 'tuar') { $expected.Add('modules/' + $module.Id + '/Login.txt') }
+    $expected.Add('modules/' + $module.Id + '/settings.csv')
     if ($module.Id -in @('approve-ref', 'delete')) { $expected.Add('modules/' + $module.Id + '/Ref_No.csv') }
 }
-$expected.Add('modules/tuar/requests.xlsx')
-$expected.Add('modules/tuar/attachments/PLACE_FILES_HERE.txt')
+$bridges = @('modules/tuar/TrueOps-TUAR.jar', 'modules/tuar/lib/TrueOps-TUAR-compat.jar')
+foreach ($path in $bridges) { $expected.Add($path) }
 
 function Read-Entry([System.IO.Compression.ZipArchive]$Archive, [string]$Name) {
     $entry = $Archive.GetEntry($Name)
@@ -114,6 +113,22 @@ function Test-NestedJar([System.IO.Compression.ZipArchive]$Archive, [string]$Nam
     } finally { $jar.Dispose(); $stream.Dispose() }
 }
 
+function Test-CompatibilityBridge([System.IO.Compression.ZipArchive]$Archive, [string]$Name) {
+    $stream = $Archive.GetEntry($prefix + $Name).Open()
+    $jar = [System.IO.Compression.ZipArchive]::new($stream, [System.IO.Compression.ZipArchiveMode]::Read)
+    try {
+        if ($jar.Entries.Count -ne 1 -or $jar.Entries[0].FullName -cne 'META-INF/MANIFEST.MF') {
+            throw 'The TUAR compatibility bridge must contain only a manifest, with no TUAR classes or dependencies.'
+        }
+        $manifest = Read-Entry $jar 'META-INF/MANIFEST.MF'
+        if ($Name -eq 'modules/tuar/TrueOps-TUAR.jar') {
+            if ($manifest -notmatch '(?m)^Main-Class: trueopstoolkit\.ModuleShortcuts\$Tuar\r?$' -or $manifest -notmatch '(?m)^Class-Path: ../../TrueOpsToolkit\.jar\r?$') {
+                throw 'Legacy TUAR shortcut must route through the central launcher.'
+            }
+        }
+    } finally { $jar.Dispose(); $stream.Dispose() }
+}
+
 $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
 try {
     $files = @($archive.Entries | Where-Object { -not $_.FullName.EndsWith('/') })
@@ -126,21 +141,16 @@ try {
     Test-NestedJar $archive 'TrueOpsToolkit.jar'
     foreach ($module in $modules) {
         Test-NestedJar $archive ('modules/' + $module.Id + '/' + $module.Jar)
-        if ($module.Id -ne 'tuar') {
-            $settings = Read-Entry $archive ($prefix + 'modules/' + $module.Id + '/Login.txt')
-            if ($settings -cne "Search,`r`nDescription,`r`n") { throw 'Release preferences must contain only empty, non-secret fields.' }
-        }
+        $settings = Read-Entry $archive ($prefix + 'modules/' + $module.Id + '/settings.csv')
+        if ($settings -cne "Search,`r`nDescription,`r`n") { throw 'Release preferences must contain only empty, non-secret fields.' }
         if ($module.Id -in @('approve-ref', 'delete')) {
             if ($archive.GetEntry($prefix + 'modules/' + $module.Id + '/Ref_No.csv').Length -ne 0) { throw 'Release reference list is not empty.' }
         }
     }
-    $stream = $archive.GetEntry($prefix + 'modules/tuar/requests.xlsx').Open()
-    $workbook = [System.IO.Compression.ZipArchive]::new($stream, [System.IO.Compression.ZipArchiveMode]::Read)
-    try {
-        [xml]$requests = Read-Entry $workbook 'xl/worksheets/sheet1.xml'
-        [xml]$options = Read-Entry $workbook 'xl/worksheets/sheet2.xml'
-        if ($requests.SelectNodes('//*[local-name()="row"]').Count -ne 1 -or $options.SelectNodes('//*[local-name()="row"]').Count -ne 0) { throw 'Release workbook must have headers and no data rows.' }
-    } finally { $workbook.Dispose(); $stream.Dispose() }
+    foreach ($path in $bridges) {
+        Test-NestedJar $archive $path
+        Test-CompatibilityBridge $archive $path
+    }
 } finally { $archive.Dispose() }
 function Find-ReleaseJavaTool([string]$Name) {
     if ($JdkHome) {
@@ -158,4 +168,4 @@ $launcher = Join-Path $root 'dist\TrueOpsToolkit.jar'
 if ($LASTEXITCODE -ne 0) { throw 'Release updater compatibility test compilation failed.' }
 & $java '-cp' ($testClasses + ';' + $launcher) 'trueopstoolkit.ToolkitUpdateManagerTest' '--verify-release' $zipPath (Join-Path $root 'releases\update.properties')
 if ($LASTEXITCODE -ne 0) { throw 'Packaged release is not compatible with the application updater.' }
-Write-Host "PASS: $zipName checksum, update descriptor, all five versions, exact file allowlist, empty account/reference inputs, schema-only workbook, and no executable/batch/driver files at any archive depth."
+Write-Host "PASS: $zipName checksum, update descriptor, four application versions, two manifest-only compatibility bridges, exact file allowlist, blank preferences/reference inputs, and no TUAR implementation/workbook/executable/batch/driver files."

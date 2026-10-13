@@ -17,7 +17,7 @@ public class ApproveProms_TrueCorp_V3 {
     public static void main(String[] args) throws IOException {
         Dialog.setLAF();
         PathFolder Folder = new PathFolder();
-        PromsSettings settings = PromsSettings.readLogin(Folder.getLogin(), true);
+        PromsSettings settings = PromsSettings.readLogin(Folder.getSettings(), true);
         String Search = settings.get("Search");
         String Description = settings.get("Description");
         int index_page = 0;

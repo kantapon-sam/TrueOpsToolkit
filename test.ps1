@@ -20,11 +20,6 @@ foreach ($test in @('AppVersionTest','ModuleSettingsTest','SharedCredentialsTest
     & $java '-cp' "$testClasses;$launcher" "trueopstoolkit.$test"
     if ($LASTEXITCODE -ne 0) { throw "$test failed" }
 }
-$tuarJar = Join-Path $dist 'modules\tuar\TrueOps-TUAR.jar'
-& $javac '-encoding' 'UTF-8' '-source' '1.8' '-target' '1.8' '-cp' $tuarJar '-d' $testClasses (Join-Path $root 'test\autorequesttuar\SettingsStoreTest.java')
-if ($LASTEXITCODE -ne 0) { throw 'TUAR settings test compile failed' }
-& $java '-cp' "$testClasses;$tuarJar;$launcher" 'autorequesttuar.SettingsStoreTest'
-if ($LASTEXITCODE -ne 0) { throw 'TUAR settings test failed' }
 $approveJar = Join-Path $dist 'modules\approve\TrueOps-Approve.jar'
 & $javac '-encoding' 'UTF-8' '-source' '1.8' '-target' '1.8' '-cp' $approveJar '-d' $testClasses (Join-Path $root 'test\com\java\myapp\PromsSettingsTest.java')
 if ($LASTEXITCODE -ne 0) { throw 'PROMS settings test compile failed' }
@@ -43,7 +38,7 @@ if (-not $SkipBrowsers) {
     $seleniumLib = Join-Path $dist 'modules\approve\lib\*'
     & $javac '-encoding' 'UTF-8' '-source' '1.8' '-target' '1.8' '-sourcepath' (Join-Path $root 'test') '-cp' $seleniumLib '-d' $testClasses (Join-Path $root 'test\SeleniumClientCheck.java')
     if ($LASTEXITCODE -ne 0) { throw 'Selenium test compile failed' }
-    foreach ($id in @('tuar','approve','approve-ref','delete')) {
+    foreach ($id in @('approve','approve-ref','delete')) {
         $module = Join-Path $dist "modules\$id"
         $driver = Join-Path $dist 'drivers\chromedriver.exe'
         & $java '-cp' "$testClasses;$(Join-Path $module 'lib\*')" 'SeleniumClientCheck' $driver $id (Join-Path $reports "selenium-$id.txt")

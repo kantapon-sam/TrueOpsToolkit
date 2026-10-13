@@ -46,8 +46,7 @@
             <condition><not><matches string="${app.version}" pattern="^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$"/></not></condition>
         </fail>
     </target>
-    <target name="modules" depends="validate-version" description="Build all four isolated tools; preserve runtime data.">
-        <build-module id="tuar" jar="TrueOps-TUAR.jar" legacy="AutoRequestTUAR.jar" main="trueopstoolkit.ModuleShortcuts$Tuar"/>
+    <target name="modules" depends="validate-version" description="Build the three PROMS tools; preserve runtime data.">
         <build-module id="approve" jar="TrueOps-Approve.jar" legacy="ApproveProms_TrueCorp_V3.jar" main="trueopstoolkit.ModuleShortcuts$Approve"/>
         <build-module id="approve-ref" jar="TrueOps-ApproveByRef.jar" legacy="ApproveProms_Ref.jar" main="trueopstoolkit.ModuleShortcuts$Ref"/>
         <build-module id="delete" jar="TrueOps-DeleteSite.jar" legacy="Delete_Site_TrueCorp.jar" main="trueopstoolkit.ModuleShortcuts$Delete"/>

@@ -28,8 +28,8 @@ import java.util.zip.ZipOutputStream;
 public final class ToolkitUpdateManagerTest {
     private static final String NEW_VERSION = "1.1.0";
     private static final String ROOT = "TrueOpsToolkit-" + NEW_VERSION;
-    private static final String[] MODULES = { "tuar", "approve", "approve-ref", "delete" };
-    private static final String[] JARS = { "TrueOps-TUAR.jar", "TrueOps-Approve.jar", "TrueOps-ApproveByRef.jar", "TrueOps-DeleteSite.jar" };
+    private static final String[] MODULES = { "approve", "approve-ref", "delete" };
+    private static final String[] JARS = { "TrueOps-Approve.jar", "TrueOps-ApproveByRef.jar", "TrueOps-DeleteSite.jar" };
     private static int checks;
 
     public static void main(String[] args) throws Exception {
@@ -43,6 +43,7 @@ public final class ToolkitUpdateManagerTest {
             testVersionsAndUrls();
             testNoUpdate(work);
             testSuccessfulInstall(work);
+            testLegacyTuarCompatibility(work);
             testRollback(work);
             testActiveProcess(work);
             testInvalidArchives(work);
@@ -80,11 +81,14 @@ public final class ToolkitUpdateManagerTest {
         }
         check(!ToolkitUpdater.managedFile("config/credentials.dat"), "Credential vault is outside managed paths");
         check(!ToolkitUpdater.managedFile("modules/approve/Login.txt"), "Login settings are outside managed paths");
+        check(!ToolkitUpdater.managedFile("modules/approve/settings.csv"), "Current module settings are outside managed paths");
         check(!ToolkitUpdater.managedFile("drivers/chromedriver.exe"), "Driver is outside managed paths");
         check(!ToolkitUpdater.managedFile("Run-TrueOpsToolkit.cmd"), "Legacy command launcher is no longer managed or required");
         check(!ToolkitUpdater.managedFile("Run-TrueOpsToolkit.bat"), "Batch launchers cannot be installed");
         check(!ToolkitUpdater.managedFile("TrueOpsToolkit.exe"), "Executable launchers cannot be installed");
         check(!ToolkitUpdater.managedFile("modules/approve/lib/nested/data.jar"), "Only flat runtime library JARs are managed");
+        check(!ToolkitUpdater.managedFile("modules/tuar/TrueOps-TUAR.jar"), "Separately maintained TUAR executable is outside managed paths");
+        check(!ToolkitUpdater.managedFile("modules/tuar/lib/old-runtime.jar"), "Separately maintained TUAR libraries are outside managed paths");
     }
 
     private static void testNoUpdate(Path work) throws Exception {
@@ -107,6 +111,7 @@ public final class ToolkitUpdateManagerTest {
         for (Map.Entry<String, byte[]> entry : preserved.entrySet()) write(home.resolve(entry.getKey()), entry.getValue());
         Source source = fixture(work.resolve("good.zip"), members(), NEW_VERSION);
         try (ZipFile archive = new ZipFile(source.archive.toFile())) {
+            check(archive.getEntry(ROOT + "/modules/tuar/TrueOps-TUAR.jar") == null, "New installer accepts a complete release containing only three PROMS tools");
             java.util.Enumeration<? extends ZipEntry> entries = archive.entries();
             while (entries.hasMoreElements()) {
                 String name = entries.nextElement().getName().toLowerCase(java.util.Locale.ROOT);
@@ -145,6 +150,7 @@ public final class ToolkitUpdateManagerTest {
 
     private static void testRollback(Path work) throws Exception {
         Path home = createHome(work.resolve("rollback"));
+        Map<String, byte[]> legacy = legacyTuarFiles();
         Map<String, byte[]> before = snapshotManaged(home);
         Source source = fixture(work.resolve("rollback.zip"), members(), NEW_VERSION);
         ToolkitUpdateManager.PendingUpdate pending = ToolkitUpdateManager.checkAndStage(home, "1.0.0", null, source);
@@ -154,7 +160,27 @@ public final class ToolkitUpdateManagerTest {
         Map<String, byte[]> after = snapshotManaged(home);
         check(before.keySet().equals(after.keySet()), "Rollback removes newly installed files and restores obsolete libraries");
         for (String name : before.keySet()) check(Arrays.equals(before.get(name), after.get(name)), "Rollback restored " + name);
+        for (Map.Entry<String, byte[]> entry : legacy.entrySet()) {
+            check(Arrays.equals(entry.getValue(), Files.readAllBytes(home.resolve(entry.getKey()))), "Rollback leaves separate TUAR file untouched: " + entry.getKey());
+        }
         check(read(home.resolve("logs/update.log")).contains("rollback restored"), "Rollback recorded without account data");
+    }
+
+    private static void testLegacyTuarCompatibility(Path work) throws Exception {
+        Path home = createHome(work.resolve("legacy-tuar"));
+        Map<String, byte[]> values = members();
+        // Releases include harmless legacy shortcuts while supporting the immutable
+        // 1.0.0 validator, including installations that skip intermediate versions.
+        values.put(ROOT + "/modules/tuar/TrueOps-TUAR.jar", jar(NEW_VERSION));
+        values.put(ROOT + "/modules/tuar/lib/TrueOps-TUAR-compat.jar", jar(NEW_VERSION));
+        Source source = fixture(work.resolve("legacy-tuar.zip"), values, NEW_VERSION);
+        ToolkitUpdateManager.PendingUpdate pending = ToolkitUpdateManager.checkAndStage(home, "1.0.0", null, source);
+        check(pending != null, "Release with legacy TUAR shortcut is accepted by the three-module contract");
+        ToolkitUpdater.install(pending, home, null);
+        for (Map.Entry<String, byte[]> entry : legacyTuarFiles().entrySet()) {
+            check(Arrays.equals(entry.getValue(), Files.readAllBytes(home.resolve(entry.getKey()))), "New installer preserves separate TUAR file despite compatibility shortcut: " + entry.getKey());
+        }
+        check(!Files.exists(home.resolve("modules/tuar/lib/TrueOps-TUAR-compat.jar")), "New installer does not add legacy TUAR shortcut libraries");
     }
 
     private static void testActiveProcess(Path work) throws Exception {
@@ -224,6 +250,7 @@ public final class ToolkitUpdateManagerTest {
             write(home.resolve("modules/" + MODULES[i] + "/" + JARS[i]), bytes("old module " + MODULES[i]));
             write(home.resolve("modules/" + MODULES[i] + "/lib/obsolete-runtime.jar"), bytes("old runtime " + MODULES[i]));
         }
+        for (Map.Entry<String, byte[]> entry : legacyTuarFiles().entrySet()) write(home.resolve(entry.getKey()), entry.getValue());
         return home;
     }
 
@@ -239,7 +266,9 @@ public final class ToolkitUpdateManagerTest {
         }
         for (String name : userData().keySet()) {
             // Clean releases omit executable/batch files; the installation may already contain a driver or older shortcut.
-            if (!name.toLowerCase(java.util.Locale.ROOT).matches(".*\\.(exe|bat|cmd)$")) {
+            // TUAR code is added only by the dedicated legacy compatibility fixture.
+            if (!name.toLowerCase(java.util.Locale.ROOT).matches(".*\\.(exe|bat|cmd)$")
+                    && !name.equals("modules/tuar/TrueOps-TUAR.jar") && !name.startsWith("modules/tuar/lib/")) {
                 values.put(ROOT + "/" + name, bytes("blank release template, must never replace local data"));
             }
         }
@@ -252,7 +281,18 @@ public final class ToolkitUpdateManagerTest {
                 "Run-TrueOpsToolkit.cmd", "user-scripts/local-task.bat",
                 "drivers/chromedriver.exe", "modules/tuar/requests.xlsx", "modules/tuar/config/settings.properties", "modules/tuar/attachments/local.txt",
                 "modules/approve/Login.txt", "modules/approve-ref/Login.txt", "modules/approve-ref/Ref_No.csv", "modules/delete/Login.txt",
+                "modules/approve/settings.csv", "modules/approve-ref/settings.csv", "modules/delete/settings.csv",
                 "modules/delete/Ref_No.csv", "modules/approve/lib/user-notes.txt" }) result.put(name, bytes("synthetic existing data: " + name));
+        result.putAll(legacyTuarFiles());
+        return result;
+    }
+
+    private static Map<String, byte[]> legacyTuarFiles() {
+        Map<String, byte[]> result = new LinkedHashMap<String, byte[]>();
+        for (String name : new String[] { "modules/tuar/TrueOps-TUAR.jar", "modules/tuar/lib/obsolete-runtime.jar",
+                "modules/tuar/requests.xlsx", "modules/tuar/config/settings.properties", "modules/tuar/attachments/local.txt" }) {
+            result.put(name, bytes("separate TUAR file: " + name));
+        }
         return result;
     }
 

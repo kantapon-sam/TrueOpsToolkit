@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.Arrays;
 import java.util.List;
@@ -21,7 +22,7 @@ public final class PromsSettingsTest {
         }
         Path directory = Files.createTempDirectory("trueops-proms-settings-test-");
         try {
-            Path login = directory.resolve("Login.txt");
+            Path login = directory.resolve("settings.csv");
             testLogin(login);
             testSearch(login);
             testReferences(directory.resolve("Ref_No.csv"));
@@ -119,6 +120,7 @@ public final class PromsSettingsTest {
             System.clearProperty("webdriver.chrome.driver");
             System.setProperty("trueops.home", directory.toString());
             PathFolder folder = new PathFolder();
+            equal("settings.csv", Paths.get(folder.getSettings()).getFileName().toString(), "Preferences use a settings filename");
             equal(directory.resolve("drivers").resolve("chromedriver.exe").toAbsolutePath().toString(),
                     folder.getChromedriver(), "Shared Toolkit driver");
             String custom = directory.resolve("explicit-driver.exe").toString();
@@ -133,7 +135,7 @@ public final class PromsSettingsTest {
     private static void testSharedAccount(Path directory) throws Exception {
         String originalHome = System.getProperty("trueops.home");
         Path sharedHome = directory.resolve("toolkit");
-        Path login = directory.resolve("Login.txt");
+        Path login = directory.resolve("settings.csv");
         char[] password = PASSWORD.toCharArray();
         Class<?> vault = Class.forName("trueopstoolkit.SharedCredentials");
         try {

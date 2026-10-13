@@ -23,23 +23,19 @@ public final class ModuleBootstrap {
         // Keep the lock until process termination, including all browser cleanup
         // hooks. The OS releases it even if this JVM crashes.
         installStopControl();
-        System.setProperty("autorequesttuar.autorun","false");
-        System.setProperty("autorequesttuar.update.disabled","true");
         System.setProperty("trueops.home",home.toString());
         System.setProperty("trueops.version",AppVersion.current());
         System.setProperty("webdriver.chrome.driver",SharedChromeDriver.path(home).toString());
         Class.forName(module.mainClass,false,ModuleBootstrap.class.getClassLoader());
         final boolean smoke=args.length==4 && "--ui-smoke".equals(args[2]);
         final Path report=smoke?Paths.get(args[3]):null;
-        if(module==ModuleSpec.TUAR){invoke(module);}
-        else {Ui.setup();SwingUtilities.invokeLater(() -> new ModuleWindow(home,module).setVisible(true));}
+        Ui.setup();SwingUtilities.invokeLater(() -> new ModuleWindow(home,module).setVisible(true));
         if(smoke) SwingUtilities.invokeLater(() -> {
             final int[] count={0};
             Timer timer=new Timer(400,null);
             timer.addActionListener(e -> {
                 count[0]++;
-                for(Frame f:Frame.getFrames()) if(f.isShowing() && f instanceof JFrame &&
-                    (module==ModuleSpec.TUAR ? f.getClass().getName().equals(module.mainClass) : f instanceof ModuleWindow)) {
+                for(Frame f:Frame.getFrames()) if(f.isShowing() && f instanceof ModuleWindow) {
                     timer.stop();
                     try {
                         Files.createDirectories(report);

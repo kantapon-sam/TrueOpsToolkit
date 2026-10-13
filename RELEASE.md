@@ -1,8 +1,8 @@
 # Releases
 
-The first release is **1.0.0**, with Git tag **v1.0.0**. It includes an English interface, one encrypted shared account, automatic application and ChromeDriver checks in a startup dialog, and direct JAR launch without bundled native executables or batch launchers. Keep published release tags and assets unchanged when publishing future versions.
+The current release is **1.0.1**, with Git tag **v1.0.1**. It includes Approve PROMS, Approve by Ref, and Delete Site. Request TUAR is maintained as a separate application. The English interface, encrypted shared account, automatic application and ChromeDriver checks in a startup dialog, and direct JAR launch are retained. The first release was **1.0.0**. Keep published release tags and assets unchanged when publishing future versions.
 
-`version.properties` is the only version source. Both PowerShell and NetBeans/Ant copy it into the launcher and apply `app.version` to all five JAR manifests. The launcher passes that version to its child programs.
+`version.properties` is the only version source. Both PowerShell and NetBeans/Ant copy it into the launcher and apply `app.version` to the application JAR manifests. The launcher passes that version to its child programs.
 
 | Change | Next version example |
 |---|---|
@@ -10,7 +10,7 @@ The first release is **1.0.0**, with Git tag **v1.0.0**. It includes an English 
 | Compatible new feature | 1.0.0 → 1.1.0 |
 | Incompatible change requiring migration | 1.0.0 → 2.0.0 |
 
-Keep executable names stable: `TrueOpsToolkit.jar`, `TrueOps-TUAR.jar`, `TrueOps-Approve.jar`, `TrueOps-ApproveByRef.jar`, and `TrueOps-DeleteSite.jar`. The release ZIP and Git tag carry the version.
+Keep application names stable: `TrueOpsToolkit.jar`, `TrueOps-Approve.jar`, `TrueOps-ApproveByRef.jar`, and `TrueOps-DeleteSite.jar`. The release ZIP and Git tag carry the version. A small `TrueOps-TUAR.jar` shortcut and manifest-only compatibility JAR remain so the 1.0.0 updater accepts the release. The shortcut opens the three-tool Toolkit; it contains no TUAR workflow or dependencies.
 
 ## Prepare the files
 
@@ -26,19 +26,19 @@ Keep executable names stable: `TrueOpsToolkit.jar`, `TrueOps-TUAR.jar`, `TrueOps
 
 For a build and package in one command, use `.\release.ps1`. Supply `-JdkHome 'C:\path\to\jdk'` when needed. Packaging requires JDK 8 or later. Tests use local/synthetic data; ChromeDriver preparation may contact Google's official download endpoints.
 
-For version 1.0.0, packaging produces:
+For version 1.0.1, packaging produces:
 
-- `releases/TrueOpsToolkit-1.0.0-windows.zip`
-- `releases/TrueOpsToolkit-1.0.0-windows.zip.sha256`
+- `releases/TrueOpsToolkit-1.0.1-windows.zip`
+- `releases/TrueOpsToolkit-1.0.1-windows.zip.sha256`
 - `releases/update.properties`
 
-The ZIP is assembled from an explicit allowlist of application JARs, dependency JARs, documentation, and newly generated blank inputs. It never copies personal `dist` contents recursively. The packaging policy rejects `.exe`, `.bat`, `.cmd`, and standalone ChromeDriver binaries, including inside bundled archives. Users open `TrueOpsToolkit.jar` directly. The TUAR workbook contains column headers and an empty Options sheet; the program refreshes its choices from the portal when used. Reference CSVs have no rows. `Login.txt` contains only empty Search/Description settings. Users set the shared account in the toolkit after extraction; ChromeDriver is downloaded automatically during startup and checked again before browser use.
+The ZIP is assembled from an explicit allowlist of application JARs, dependency JARs, documentation, and newly generated blank inputs. It never copies personal `dist` contents recursively. The packaging policy rejects `.exe`, `.bat`, `.cmd`, and standalone ChromeDriver binaries, including inside bundled archives. Users open `TrueOpsToolkit.jar` directly. Reference CSVs have no rows. Each PROMS module has `settings.csv` with empty Search/Description preferences and no account credentials. The TUAR implementation, dependencies, workbook, and attachments template are excluded. Users set the shared account in the toolkit after extraction; ChromeDriver is downloaded automatically during startup and checked again before browser use.
 
-Existing runtime data in `dist` is kept by a normal build. Private `tools/*/seed` data is never copied back into `dist` or into a release. A successful build removes only the four known obsolete module JAR names after creating their replacements.
+Existing personal runtime data in `dist` is kept by a normal build, including any legacy TUAR inputs. Private `tools/*/seed` data is never copied back into `dist` or into a release. Existing PROMS `Login.txt` preferences are migrated to `settings.csv` on first use.
 
 ## Publish in Git
 
-Commit the reviewed source, set tag `v1.0.0` on that commit, then create the release using the corresponding changelog and attach all three files above. For future releases, substitute the version from `version.properties`.
+Commit the reviewed source, set tag `v1.0.1` on that commit, then create the release using the corresponding changelog and attach all three files above. For future releases, substitute the version from `version.properties`.
 
 The app update feed is `https://github.com/kantapon-sam/TrueOpsToolkit/releases/latest/download/update.properties`. The generated descriptor contains `app.version`, the versioned `archive.url`, `archive.sha256`, and `archive.root`. Publish the descriptor together with its exact ZIP, because rebuilding the ZIP changes its checksum. The application updater replaces application files while retaining the shared account and personal runtime inputs.
 

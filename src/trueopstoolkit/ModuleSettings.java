@@ -17,7 +17,7 @@ final class ModuleSettings {
     ModuleSettings(Path home,ModuleSpec module) {this.module=module;directory=module.directory(home);}
 
     void load() throws IOException {
-        byte[] login=read(directory.resolve("Login.txt"));
+        byte[] login=read(SettingsFiles.resolve(directory));
         byte[] references=hasReferences()?read(directory.resolve("Ref_No.csv")):null;
         String loginText=decode(login),refText=decode(references);
         List<String[]> loadedRows=new ArrayList<String[]>();
@@ -72,7 +72,7 @@ final class ModuleSettings {
 
     void save() throws IOException {
         validate(false);
-        Path login=directory.resolve("Login.txt"),references=directory.resolve("Ref_No.csv");
+        Path login=SettingsFiles.resolve(directory),references=directory.resolve("Ref_No.csv");
         if(!Arrays.equals(originalLogin,read(login)) || (hasReferences() && !Arrays.equals(originalReferences,read(references))))
             throw new IOException("The files changed outside this window. Click Reload saved settings before saving over them.");
         StringBuilder content=new StringBuilder();

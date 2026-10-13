@@ -21,7 +21,7 @@ public class Delete_Site_TrueCorp {
     public static void main(String[] args) throws IOException {
         Dialog.setLAF();
         PathFolder Folder = new PathFolder();
-        PromsSettings settings = PromsSettings.readLogin(Folder.getLogin(), false);
+        PromsSettings settings = PromsSettings.readLogin(Folder.getSettings(), false);
         List<String[]> references = PromsSettings.readReferences(Folder.getListWorkOrder(), 2);
         final AtomicReference<WebDriver> ownedDriver = new AtomicReference<>();
         final Timer timer = new Timer("delete-site-window-monitor", true);

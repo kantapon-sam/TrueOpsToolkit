@@ -5,6 +5,8 @@
 /tools/*/seed/
 *.log
 Login.txt
+settings.csv
+settings-legacy*.csv
 Ref_No.csv
 requests.xlsx
 User/

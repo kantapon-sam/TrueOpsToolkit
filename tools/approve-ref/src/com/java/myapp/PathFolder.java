@@ -5,7 +5,7 @@ import java.io.*;
 public class PathFolder {
 
     private String current;
-    private String Login;
+    private String Settings;
 
     private String Chromedriver;
     private String ZipChromedriver;
@@ -15,7 +15,7 @@ public class PathFolder {
     public PathFolder() {
         try {
             current = new File(".").getCanonicalPath();
-            Login = new File(".").getCanonicalPath() + "\\Login.txt";
+            Settings = new File(".").getCanonicalPath() + "\\settings.csv";
 
             Chromedriver = new File(".").getCanonicalPath() + "\\chromedriver.exe";
             ZipChromedriver = new File(".").getCanonicalPath() + "\\chromedriver-win64.zip";
@@ -31,8 +31,8 @@ public class PathFolder {
         return current;
     }
 
-    public String getLogin() {
-        return Login;
+    public String getSettings() {
+        return Settings;
     }
 
     public String getChromedriver() {

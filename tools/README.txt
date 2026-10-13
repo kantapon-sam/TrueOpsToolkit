@@ -1,9 +1,8 @@
 TrueOps Toolkit module sources
 =============================
 
-Version 1.0.0 includes an English launcher and English interfaces for all tools.
+Version 1.0.1 includes an English launcher and English interfaces for three PROMS tools.
 
-tuar        Request TUAR       TrueOps-TUAR.jar
 approve     Approve PROMS      TrueOps-Approve.jar
 approve-ref Approve by Ref     TrueOps-ApproveByRef.jar
 delete      Delete Site        TrueOps-DeleteSite.jar
@@ -15,7 +14,11 @@ The launcher starts each tool with that module's working directory.
 
 seed/ contains private legacy runtime files and is ignored by Git.
 Neither build method copies seed data into dist or release packages.
-release.ps1 generates new blank workbooks, reference lists, and settings.
+release.ps1 generates new blank reference lists and settings.csv preferences.
+Request TUAR is maintained as a separate application and is not a Toolkit task.
+Release packages exclude its implementation, dependencies, and workbook.
+A small legacy TrueOps-TUAR.jar shortcut and compatibility marker remain for
+automatic updates from 1.0.0. The shortcut opens the three-tool Toolkit.
 Every Toolkit module uses
 dist/drivers/chromedriver.exe, automatically prepared during Toolkit startup
 and checked again before browser startup. No driver binary, .exe, .bat, or
@@ -26,9 +29,9 @@ The manager migrates a compatible legacy driver if available and checks the
 official Google release endpoint for a newer compatible version.
 Changes made in dist/modules/* are retained across builds.
 Use the shared account dialog for every login. Username and password are
-protected together with Windows DPAPI and are never saved in Login.txt.
+protected together with Windows DPAPI and are never saved in settings.csv.
+Legacy Login.txt Search/Description preferences migrate automatically on first use.
 Change task settings and PROMS reference lists through the module window.
-TUAR can select its workbook and attachments folder in the window.
 Saved values are kept in dist/modules/<id> (or the selected data path), not seed/.
 The shared encrypted account is kept in dist/config/credentials.dat.
 Opening a module JAR routes through the Toolkit and its shared account.

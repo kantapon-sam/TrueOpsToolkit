@@ -34,8 +34,10 @@ import java.util.zip.ZipFile;
 
 /** Separate, Java 8 compatible installer. Only application-owned files are replaceable. */
 public final class ToolkitUpdater {
-    private static final String[] MODULES = { "tuar", "approve", "approve-ref", "delete" };
-    private static final String[] MODULE_JARS = { "TrueOps-TUAR.jar", "TrueOps-Approve.jar",
+    // TUAR is maintained separately. Its previous executable, libraries, and user data
+    // stay outside this installer's ownership, including during rollback.
+    private static final String[] MODULES = { "approve", "approve-ref", "delete" };
+    private static final String[] MODULE_JARS = { "TrueOps-Approve.jar",
         "TrueOps-ApproveByRef.jar", "TrueOps-DeleteSite.jar" };
     private static final Set<String> ROOT_FILES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
             "TrueOpsToolkit.jar", "version.properties", "README.md", "CHANGELOG.md", "RELEASE.md")));

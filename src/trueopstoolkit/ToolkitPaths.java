@@ -34,7 +34,7 @@ final class ToolkitPaths {
     }
     static List<String> childCommand(Path home, ModuleSpec m, Path smokeReport) {
         List<String> c=new ArrayList<String>();
-        Collections.addAll(c,javaExecutable(),"-Dfile.encoding=UTF-8", "-Dautorequesttuar.update.disabled=true", "-Dautorequesttuar.autorun=false", "-cp",
+        Collections.addAll(c,javaExecutable(),"-Dfile.encoding=UTF-8", "-cp",
             launcherJar(home)+File.pathSeparator+m.directory(home).resolve(m.jar)+File.pathSeparator+m.directory(home).resolve("lib").toString()+File.separator+"*",
             "trueopstoolkit.ModuleBootstrap",home.toString(),m.id);
         if(smokeReport!=null) {c.add("--ui-smoke"); c.add(smokeReport.toString());}

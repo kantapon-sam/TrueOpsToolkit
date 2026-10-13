@@ -22,7 +22,7 @@ public class ApproveProms_Ref {
     public static void main(String[] args) throws IOException {
         Dialog.setLAF();
         PathFolder Folder = new PathFolder();
-        PromsSettings settings = PromsSettings.readLogin(Folder.getLogin(), false);
+        PromsSettings settings = PromsSettings.readLogin(Folder.getSettings(), false);
         List<String[]> references = PromsSettings.readReferences(Folder.getRef_No(), 3);
 
         String ref = "";

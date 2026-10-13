@@ -110,7 +110,7 @@ public final class BrowserCheck {
                     + "</title></head><body style='font-family:Segoe UI,sans-serif;background:#112132;color:#fff;padding:70px'>"
                     + "<h1>TrueOps Toolkit</h1><h2>Browser check passed</h2>"
                     + "<p>Chrome and ChromeDriver opened this local test page successfully.</p>"
-                    + "<p>No TUAR or PROMS operation has been started.</p></body></html>";
+                    + "<p>No PROMS operation has been started.</p></body></html>";
             String localPage = "data:text/html;charset=utf-8," + java.net.URLEncoder.encode(html, "UTF-8").replace("+", "%20");
             request(endpoint + "/session/" + sessionId + "/url", "POST", "{\"url\":" + json(localPage) + "}", 15000);
             String titleResponse = request(endpoint + "/session/" + sessionId + "/title", "GET", null, 5000);

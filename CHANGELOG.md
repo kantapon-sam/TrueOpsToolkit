@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1 — 2026-10-13
+
+- Remove Request TUAR from the launcher because it is maintained as a separate application.
+- Keep Approve PROMS, Approve by Ref, and Delete Site, with an updated three-tool launcher layout.
+- Exclude the TUAR implementation, libraries, and blank workbook from new release packages.
+- Retain a small legacy TUAR shortcut and compatibility marker for automatic updates from 1.0.0; the shortcut opens the three-tool Toolkit.
+- Rename PROMS preferences to `settings.csv`, automatically migrating Search and Description from existing `Login.txt` files without storing account credentials.
+- Retain the shared encrypted account and automatic application and ChromeDriver updates for the three PROMS tools.
+
 ## 1.0.0 — 2026-10-13
 
 First release of TrueOps Toolkit.

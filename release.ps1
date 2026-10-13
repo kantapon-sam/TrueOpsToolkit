@@ -75,13 +75,6 @@ if ($versionLine.Count -ne 1) { throw 'Expected one app.version in version.prope
 $version = ($versionLine[0] -split '=', 2)[1].Trim()
 if ($version -notmatch '^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$') { throw 'The release update feed requires a stable MAJOR.MINOR.PATCH version. Use build.ps1 for development prereleases.' }
 
-function Find-JavaTool([string]$Name) {
-    if ($JdkHome) {
-        $candidate = Join-Path $JdkHome ('bin\' + $Name + '.exe')
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
-    }
-    return (Get-Command ($Name + '.exe') -ErrorAction Stop).Source
-}
 function Write-Utf8([string]$Path, [string]$Value) {
     [System.IO.File]::WriteAllText($Path, $Value, (New-Object System.Text.UTF8Encoding($false)))
 }
@@ -116,9 +109,28 @@ function Check-AppJar([string]$Path, [string]$ExpectedMain) {
     } finally { $archive.Dispose() }
 }
 
+function Stage-CompatibilityJar([string]$Relative, [bool]$Launcher) {
+    # The 1.0.0 updater requires a TUAR application JAR and one dependency JAR.
+    # Manifest-only bridges satisfy that contract without bundling TUAR code.
+    $target = Join-Path $script:stageRoot $Relative
+    New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+    $lines = @('Manifest-Version: 1.0', 'Implementation-Title: TrueOps Toolkit compatibility bridge', ('Implementation-Version: ' + $version))
+    if ($Launcher) { $lines += @('Main-Class: trueopstoolkit.ModuleShortcuts$Tuar', 'Class-Path: ../../TrueOpsToolkit.jar') }
+    $archive = [System.IO.Compression.ZipFile]::Open($target, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $entry = $archive.CreateEntry('META-INF/MANIFEST.MF')
+        $stream = $entry.Open()
+        try {
+            $bytes = [System.Text.Encoding]::ASCII.GetBytes(($lines -join "`r`n") + "`r`n`r`n")
+            $stream.Write($bytes, 0, $bytes.Length)
+        } finally { $stream.Dispose() }
+    } finally { $archive.Dispose() }
+    Assert-ReleaseArchive $target
+    if ($Launcher) { Check-AppJar $target 'trueopstoolkit.ModuleShortcuts$Tuar' }
+    $script:allowed.Add($Relative.Replace('\', '/'))
+}
+
 if (-not $SkipBuild) { & (Join-Path $root 'build.ps1') -JdkHome $JdkHome }
-$java = Find-JavaTool 'java'
-$javac = Find-JavaTool 'javac'
 $dist = Join-Path $root 'dist'
 $stagingParent = [System.IO.Path]::GetFullPath((Join-Path $root 'build\release'))
 $packageName = 'TrueOpsToolkit-' + $version
@@ -131,7 +143,6 @@ $script:allowed = New-Object 'System.Collections.Generic.List[string]'
 
 # Explicit allowlist: no recursive copy from the personal dist directory.
 $modules = @(
-    @{Id='tuar'; Jar='TrueOps-TUAR.jar'; Main='trueopstoolkit.ModuleShortcuts$Tuar'},
     @{Id='approve'; Jar='TrueOps-Approve.jar'; Main='trueopstoolkit.ModuleShortcuts$Approve'},
     @{Id='approve-ref'; Jar='TrueOps-ApproveByRef.jar'; Main='trueopstoolkit.ModuleShortcuts$Ref'},
     @{Id='delete'; Jar='TrueOps-DeleteSite.jar'; Main='trueopstoolkit.ModuleShortcuts$Delete'}
@@ -152,30 +163,19 @@ foreach ($module in $modules) {
         Stage-File $library.FullName ('modules\' + $module.Id + '\lib\' + $library.Name)
     }
     $directory = Join-Path $script:stageRoot ('modules\' + $module.Id)
-    if ($module.Id -ne 'tuar') {
-        # Fresh non-secret preferences only. Account fields are never written here.
-        Write-Utf8 (Join-Path $directory 'Login.txt') "Search,`r`nDescription,`r`n"
-        $script:allowed.Add('modules/' + $module.Id + '/Login.txt')
-    }
+    # Fresh non-secret preferences only. Account fields are never written here.
+    Write-Utf8 (Join-Path $directory 'settings.csv') "Search,`r`nDescription,`r`n"
+    $script:allowed.Add('modules/' + $module.Id + '/settings.csv')
     if ($module.Id -in @('approve-ref', 'delete')) {
         Write-Utf8 (Join-Path $directory 'Ref_No.csv') ''
         $script:allowed.Add('modules/' + $module.Id + '/Ref_No.csv')
     }
 }
 
-# Generate a new workbook from its schema, never from seed or runtime requests.
-$helperClasses = Join-Path $stagingParent 'helper-classes'
-New-Item -ItemType Directory -Path $helperClasses -Force | Out-Null
-$tuar = Join-Path $script:stageRoot 'modules\tuar'
-$helperClasspath = (Join-Path $tuar 'TrueOps-TUAR.jar') + ';' + (Join-Path $tuar 'lib\*')
-& $javac '-encoding' 'UTF-8' '-source' '1.8' '-target' '1.8' '-cp' $helperClasspath '-d' $helperClasses (Join-Path $root 'test\release\ReleaseTemplate.java')
-if ($LASTEXITCODE -ne 0) { throw 'Release template helper compilation failed.' }
-& $java '-cp' ($helperClasses + ';' + $helperClasspath) 'autorequesttuar.ReleaseTemplate' (Join-Path $tuar 'requests.xlsx')
-if ($LASTEXITCODE -ne 0) { throw 'Blank release workbook validation failed.' }
-$script:allowed.Add('modules/tuar/requests.xlsx')
-New-Item -ItemType Directory -Path (Join-Path $tuar 'attachments') -Force | Out-Null
-Write-Utf8 (Join-Path $tuar 'attachments\PLACE_FILES_HERE.txt') "Put only the files required by your own request rows in this folder.`r`n"
-$script:allowed.Add('modules/tuar/attachments/PLACE_FILES_HERE.txt')
+# Preserve the old automatic update contract with two tiny manifest-only JARs.
+# The old TUAR shortcut opens the three-tool launcher; TUAR is a separate app.
+Stage-CompatibilityJar 'modules\tuar\TrueOps-TUAR.jar' $true
+Stage-CompatibilityJar 'modules\tuar\lib\TrueOps-TUAR-compat.jar' $false
 
 $actual = @(Get-ChildItem -LiteralPath $script:stageRoot -File -Recurse | ForEach-Object { $_.FullName.Substring($script:stageRoot.Length + 1).Replace('\', '/') } | Sort-Object)
 foreach ($relative in $actual) { Assert-ReleaseFileName $relative }
@@ -195,5 +195,5 @@ Write-Utf8 (Join-Path $releaseRoot 'update.properties') ("app.version=$version`r
 Write-Host "Release ready: $zipPath"
 Write-Host "SHA256: $hash"
 Write-Host 'Update feed: releases\update.properties (attach it to the same GitHub release).'
-Write-Host 'Contains application files and blank inputs only. No account, runtime settings, logs, existing driver, or personal workbook was copied.'
+Write-Host 'Contains three PROMS tools, blank preferences/reference lists, and a manifest-only legacy update bridge. No TUAR implementation, workbook, account, runtime settings, logs, or existing driver was copied.'
 Write-Host 'Verified every archive layer: no EXE, BAT, CMD, or standalone ChromeDriver binary.'

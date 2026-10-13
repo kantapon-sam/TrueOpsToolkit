@@ -127,7 +127,6 @@ Write-Host ('Compiler: ' + $versionText + '; target: Java 8')
 Ensure-Folder $buildRoot
 Ensure-Folder $distRoot
 $modules = @(
-    @{ Id = 'tuar'; Jar = 'TrueOps-TUAR.jar'; Legacy = 'AutoRequestTUAR.jar'; Main = 'trueopstoolkit.ModuleShortcuts$Tuar' },
     @{ Id = 'approve'; Jar = 'TrueOps-Approve.jar'; Legacy = 'ApproveProms_TrueCorp_V3.jar'; Main = 'trueopstoolkit.ModuleShortcuts$Approve' },
     @{ Id = 'approve-ref'; Jar = 'TrueOps-ApproveByRef.jar'; Legacy = 'ApproveProms_Ref.jar'; Main = 'trueopstoolkit.ModuleShortcuts$Ref' },
     @{ Id = 'delete'; Jar = 'TrueOps-DeleteSite.jar'; Legacy = 'Delete_Site_TrueCorp.jar'; Main = 'trueopstoolkit.ModuleShortcuts$Delete' }
