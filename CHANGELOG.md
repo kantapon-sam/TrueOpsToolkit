@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.2 — 2026-10-13
+
+- Redesign the shared account dialog with a clear saved-account state, larger fields, and Show password beside the Password heading.
+- Load the actual saved password into the editor, masked as dots by default. Show password now reveals saved passwords as well as newly typed values.
+- Save username-only edits without losing the existing password; reject blank replacements and preserve the vault when cancelling. Reset visibility and clear the editor when the dialog closes.
+- Keep Windows account encryption and add synthetic dialog tests for reveal/hide, reopening, editing, cancellation, empty passwords, and unreadable account files.
+
 ## 1.1.1 — 2026-10-13
 
 - Fix approval stopping before confirmation because the comment button's checkmark was mistaken for an earlier success response.

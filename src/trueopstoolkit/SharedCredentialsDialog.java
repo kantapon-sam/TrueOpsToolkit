@@ -8,44 +8,82 @@ import java.util.Arrays;
 import java.util.Optional;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.LineBorder;
 
 /** The single account editor used by the launcher and every module. */
 public final class SharedCredentialsDialog {
     private SharedCredentialsDialog() { }
     public static boolean showDialog(Component parent,Path home) {
-        final JDialog dialog=new JDialog(parent instanceof Window?(Window)parent:SwingUtilities.getWindowAncestor(parent),"Shared account | TrueOps Toolkit",Dialog.ModalityType.APPLICATION_MODAL);
-        JPanel body=new JPanel(new BorderLayout(0,16));body.setBorder(new EmptyBorder(20,22,20,22));
-        body.add(Ui.note("This account is shared by all four PROMS tools.\nWindows encrypts it for your user account. settings.csv stores only tool preferences."),BorderLayout.NORTH);
+        Window owner=parent instanceof Window?(Window)parent:parent==null?null:SwingUtilities.getWindowAncestor(parent);
+        final JDialog dialog=new JDialog(owner,"Shared account | TrueOps Toolkit",Dialog.ModalityType.APPLICATION_MODAL);
+        JPanel root=new JPanel(new BorderLayout());root.setBackground(Ui.BG);
+        root.add(Ui.header("Shared account","One account for all four PROMS tools"),BorderLayout.NORTH);
+        JPanel body=new JPanel(new BorderLayout(0,20));body.setOpaque(false);body.setBorder(new EmptyBorder(20,24,22,24));
         JTextField username=new JTextField(28);JPasswordField password=new JPasswordField(28);
-        JLabel passwordNote=Ui.label("Enter your password",12,Ui.MUTED,false);JCheckBox show=new JCheckBox("Show password");char echo=password.getEchoChar();
+        username.setName("sharedUsername");password.setName("sharedPassword");
+        for(JTextField field:new JTextField[]{username,password}) {
+            field.setFont(new Font("Tahoma",Font.PLAIN,16));field.setForeground(Ui.TEXT);
+            field.setBorder(new CompoundBorder(field.getBorder(),new EmptyBorder(6,8,6,8)));
+        }
+        final char echo='\u2022';password.setEchoChar(echo);
+        JTextArea passwordNote=Ui.note("Enter your password. Use Show password to check what you typed.");
+        passwordNote.setFont(new Font("Tahoma",Font.PLAIN,12));passwordNote.setRows(2);
+        JCheckBox show=new JCheckBox("Show password");show.setName("showPassword");show.setOpaque(false);show.setForeground(Ui.TEXT);show.setFont(new Font("Tahoma",Font.PLAIN,12));
         show.addActionListener(e -> password.setEchoChar(show.isSelected()?(char)0:echo));
-        JPanel fields=new JPanel(new GridLayout(0,1,0,8));fields.add(new JLabel("Username"));fields.add(username);fields.add(new JLabel("Password"));fields.add(password);fields.add(passwordNote);fields.add(show);body.add(fields,BorderLayout.CENTER);
-        final char[][] previous={null};final boolean[] changed={false};
+        JLabel accountState=Ui.label("No account saved",12,Ui.MUTED,true);
+        JPanel fields=new JPanel(new GridBagLayout());fields.setBackground(Color.WHITE);
+        fields.setBorder(new CompoundBorder(new LineBorder(new Color(217,226,237)),new EmptyBorder(16,18,16,18)));
+        addField(fields,0,accountState,0);addField(fields,1,Ui.label("Username",14,Ui.TEXT,true),16);addField(fields,2,username,6);
+        JPanel passwordHeading=new JPanel(new BorderLayout());passwordHeading.setOpaque(false);
+        passwordHeading.add(Ui.label("Password",14,Ui.TEXT,true),BorderLayout.WEST);passwordHeading.add(show,BorderLayout.EAST);
+        addField(fields,3,passwordHeading,16);addField(fields,4,password,6);addField(fields,5,passwordNote,8);
+        body.add(fields,BorderLayout.CENTER);
+        final boolean[] changed={false};
         try {
             Optional<SharedCredentials.Credentials> saved=SharedCredentials.load(home);
-            if(saved.isPresent())try(SharedCredentials.Credentials credentials=saved.get()){username.setText(credentials.getUsername());previous[0]=credentials.copyPassword();passwordNote.setText("Leave the password blank to keep the saved password.");}
-        } catch(IOException ex){passwordNote.setText("Cannot read saved account. Remove it and save a new one.");}
-        JPanel buttons=new JPanel(new FlowLayout(FlowLayout.RIGHT));JButton remove=new JButton("Remove saved account"),cancel=new JButton("Cancel"),save=Ui.button("Save shared account",Ui.NAVY);
+            if(saved.isPresent())try(SharedCredentials.Credentials credentials=saved.get()) {
+                username.setText(credentials.getUsername());char[] value=credentials.copyPassword();
+                try {password.setText(new String(value));} finally {Arrays.fill(value,'\0');}
+                accountState.setText("Saved account");accountState.setForeground(new Color(26,125,96));
+                passwordNote.setText("Your saved password is loaded. Show it to review, or replace it to update.");
+            }
+        } catch(IOException ex){accountState.setText("Account unavailable");passwordNote.setText("Cannot read the saved account. Remove it and save a new one.");}
+        JPanel footer=new JPanel(new BorderLayout(0,14));footer.setOpaque(false);
+        footer.add(Ui.label("Saved securely for your Windows account. Changes apply to every tool.",12,Ui.MUTED,false),BorderLayout.NORTH);
+        JPanel buttons=new JPanel(new BorderLayout(12,0));buttons.setOpaque(false);
+        JPanel primary=new JPanel(new FlowLayout(FlowLayout.RIGHT,8,0));primary.setOpaque(false);
+        JButton remove=new JButton("Remove saved account"),cancel=new JButton("Cancel"),save=Ui.button("Save shared account",Ui.NAVY);
         remove.setEnabled(java.nio.file.Files.exists(SharedCredentials.file(home)));
         cancel.addActionListener(e -> dialog.dispose());
         save.addActionListener(e -> {
-            char[] entered=password.getPassword();char[] selected=entered.length==0 && previous[0]!=null?Arrays.copyOf(previous[0],previous[0].length):entered;
+            char[] entered=password.getPassword();
             try {
-                SharedCredentials.save(home,username.getText().trim(),selected);
+                SharedCredentials.save(home,username.getText().trim(),entered);
                 changed[0]=true;
                 // The vault is committed first; an interrupted cleanup never loses the account.
                 SharedCredentialsMigration.cleanLegacy(home,null);changed[0]=true;dialog.dispose();
             } catch(IOException ex){Ui.showError(dialog,ex);}
-            finally {Arrays.fill(entered,'\0');Arrays.fill(selected,'\0');}
+            finally {Arrays.fill(entered,'\0');}
         });
         remove.addActionListener(e -> {
             if(JOptionPane.showConfirmDialog(dialog,"Remove the shared account from all tools?\nYou will need to set up an account before your next run.","Remove shared account",JOptionPane.YES_NO_OPTION)!=JOptionPane.YES_OPTION)return;
             try {SharedCredentialsMigration.cleanLegacy(home,null);SharedCredentials.delete(home);changed[0]=true;dialog.dispose();}
             catch(IOException ex){Ui.showError(dialog,ex);}
         });
-        buttons.add(remove);buttons.add(cancel);buttons.add(save);body.add(buttons,BorderLayout.SOUTH);dialog.setContentPane(body);
-        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);dialog.getRootPane().setDefaultButton(save);dialog.pack();dialog.setMinimumSize(new Dimension(600,390));dialog.setSize(650,400);dialog.setLocationRelativeTo(parent);
+        JPanel secondary=new JPanel(new FlowLayout(FlowLayout.LEFT,0,0));secondary.setOpaque(false);secondary.add(remove);
+        buttons.add(secondary,BorderLayout.WEST);primary.add(cancel);primary.add(save);buttons.add(primary,BorderLayout.EAST);
+        footer.add(buttons,BorderLayout.SOUTH);body.add(footer,BorderLayout.SOUTH);root.add(body,BorderLayout.CENTER);dialog.setContentPane(root);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);dialog.getRootPane().setDefaultButton(save);
+        dialog.getRootPane().registerKeyboardAction(e -> dialog.dispose(),KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0),JComponent.WHEN_IN_FOCUSED_WINDOW);
+        dialog.pack();dialog.setMinimumSize(new Dimension(680,540));dialog.setSize(Math.max(680,dialog.getWidth()),Math.max(540,dialog.getHeight()));dialog.setLocationRelativeTo(parent);
         try {dialog.setVisible(true);return changed[0];}
-        finally {password.setText("");if(previous[0]!=null)Arrays.fill(previous[0],'\0');}
+        finally {password.setEchoChar(echo);password.setText("");}
+    }
+
+    private static void addField(JPanel panel,int row,Component component,int top) {
+        GridBagConstraints c=new GridBagConstraints();c.gridx=0;c.gridy=row;c.weightx=1;
+        c.fill=GridBagConstraints.HORIZONTAL;c.anchor=GridBagConstraints.NORTHWEST;c.insets=new Insets(top,0,0,0);
+        panel.add(component,c);
     }
 }

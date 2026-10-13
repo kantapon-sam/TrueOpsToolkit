@@ -2,13 +2,13 @@
 
 A Windows desktop launcher for four PROMS tools, with one encrypted shared account and one active tool at a time.
 
-**Current version: 1.1.1** · [Download the latest release](https://github.com/kantapon-sam/TrueOpsToolkit/releases/latest) · [Changelog](CHANGELOG.md)
+**Current version: 1.1.2** · [Download the latest release](https://github.com/kantapon-sam/TrueOpsToolkit/releases/latest) · [Changelog](CHANGELOG.md)
 
 ## Get started
 
-1. Download `TrueOpsToolkit-1.1.1-windows.zip` from Releases and extract the complete folder.
+1. Download `TrueOpsToolkit-1.1.2-windows.zip` from Releases and extract the complete folder.
 2. Open `TrueOpsToolkit.jar` directly. Windows, Java 8 or later, Windows PowerShell, and Google Chrome are required. If JAR files are not associated with Java, run `java -jar TrueOpsToolkit.jar` from the extracted folder.
-3. Select **Shared account**, enter your username and password, and save. All four tools use this account.
+3. Select **Shared account**, enter your username and password, and save. All four tools use this account. A saved password appears as dots; select **Show password** to view it, or replace it to update. Cancel leaves the saved account unchanged.
 4. Select **Portal settings** and choose External or Internal. Connect to the company network or VPN before using Internal.
 5. Open a tool, configure its settings and request list, and review the data before starting.
 
@@ -27,7 +27,7 @@ The release ZIP contains no ChromeDriver binary, `.exe`, `.bat`, or `.cmd` files
 
 The username and password are encrypted together using **Windows DPAPI CurrentUser** in `config/credentials.dat`. There is no separate key file, and account values are excluded from `settings.csv` and individual tool settings. Decryption requires the Windows account that saved the credentials, normally on the same computer. Programs running under that Windows account can also decrypt them. Each recipient of a distributed release should configure their own account in the application.
 
-Edit the account from the launcher or the **Shared account settings** button in a tool. Every tool uses the latest saved account. When editing, leave the password empty to retain the saved password, or remove the saved account before configuring a new one. If the account file cannot be read, the tool stops before signing in and asks you to configure the shared account again.
+Edit the account from the launcher or the **Shared account settings** button in a tool. Every tool uses the latest saved account. The saved password loads as dots; **Show password** reveals the saved or newly typed value. Keep the loaded value to retain it, or replace it and save. Empty passwords are rejected. Cancel leaves the saved account unchanged, and closing the dialog resets password visibility. If the account file cannot be read, the tool stops before signing in and asks you to configure the shared account again.
 
 If the Toolkit has no saved shared account, it checks legacy account files inside its module folders in this order: Approve PROMS, Approve by Ref, Delete Site, and TK07 Review. It verifies that the encrypted account can be read back before removing the old account fields. An existing shared account is retained. Original standalone project folders are not imported or modified automatically.
 

@@ -16,7 +16,7 @@ if (-not (Test-Path -LiteralPath $launcher)) { throw 'Run build.ps1 first.' }
 $rootTests = @(Get-ChildItem -LiteralPath (Join-Path $root 'test\trueopstoolkit') -Filter '*.java' -File | ForEach-Object { $_.FullName })
 & $javac '-encoding' 'UTF-8' '-source' '1.8' '-target' '1.8' '-sourcepath' (Join-Path $root 'test') '-cp' $launcher '-d' $testClasses @rootTests
 if ($LASTEXITCODE -ne 0) { throw 'Test compile failed' }
-foreach ($test in @('AppVersionTest','ModuleSettingsTest','PortalSettingsTest','PortalSettingsDialogTest','SharedCredentialsTest','SharedCredentialsMigrationTest','RetiredModulesTest','SharedChromeDriverTest','ToolkitUpdateManagerTest','ToolkitUpdaterLifecycleTest','MainUpdateCloseTest','MainStartupUpdateTest','MainInstallHandoffTest','ModuleWindowProgressTest','ModuleWindowSearchTest','UiSnapshotTest')) {
+foreach ($test in @('AppVersionTest','ModuleSettingsTest','PortalSettingsTest','PortalSettingsDialogTest','SharedCredentialsTest','SharedCredentialsDialogTest','SharedCredentialsMigrationTest','RetiredModulesTest','SharedChromeDriverTest','ToolkitUpdateManagerTest','ToolkitUpdaterLifecycleTest','MainUpdateCloseTest','MainStartupUpdateTest','MainInstallHandoffTest','ModuleWindowProgressTest','ModuleWindowSearchTest','UiSnapshotTest')) {
     & $java '-cp' "$testClasses;$launcher" "trueopstoolkit.$test"
     if ($LASTEXITCODE -ne 0) { throw "$test failed" }
 }

@@ -1,7 +1,7 @@
 TrueOps Toolkit module sources
 =============================
 
-Version 1.1.1 includes an English launcher and English interfaces for four PROMS tools.
+Version 1.1.2 includes an English launcher and English interfaces for four PROMS tools.
 
 approve     Approve PROMS      TrueOps-Approve.jar
 approve-ref Approve by Ref     TrueOps-ApproveByRef.jar
