@@ -24,15 +24,16 @@ public final class AppVersionTest {
             switch (module) {
                 case APPROVE: shortcut = "Approve"; break;
                 case REF: shortcut = "Ref"; break;
+                case TK07: shortcut = "Tk07"; break;
                 default: shortcut = "Delete";
             }
             check(module.directory(root.resolve("dist")).resolve(module.jar), expected,
                     "trueopstoolkit.ModuleShortcuts$" + shortcut, true);
         }
-        if (ModuleSpec.values().length != 3) throw new AssertionError("Toolkit must offer exactly three PROMS tools.");
+        if (ModuleSpec.values().length != 4) throw new AssertionError("Toolkit must offer exactly four PROMS tools.");
         try {ModuleSpec.byId("tuar");throw new AssertionError("TUAR must not be a runnable Toolkit task.");}
         catch (IllegalArgumentException expectedRemoval) { }
-        System.out.println("PASS: launcher and all three PROMS modules use version " + expected + "; TUAR is not a Toolkit task.");
+        System.out.println("PASS: launcher and all four PROMS modules use version " + expected + "; TUAR is not a Toolkit task.");
     }
 
     private static void check(Path file, String expected, String main, boolean shortcut) throws Exception {

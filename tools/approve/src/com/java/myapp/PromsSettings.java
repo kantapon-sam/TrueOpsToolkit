@@ -49,8 +49,8 @@ final class PromsSettings {
                 throw new IOException("Set a non-empty Search in the Toolkit settings before approving.");
             }
             String[] terms = search.split("&&", -1);
-            if (terms.length > 2) {
-                throw new IOException("Search supports at most two terms separated by &&.");
+            if (terms.length > 4) {
+                throw new IOException("Search supports at most four terms separated by &&.");
             }
             for (String term : terms) {
                 if (term.trim().isEmpty()) {

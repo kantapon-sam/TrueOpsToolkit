@@ -82,7 +82,8 @@ foreach ($path in @('TrueOpsToolkit.jar', 'README.md', 'CHANGELOG.md', 'RELEASE.
 $modules = @(
     @{Id='approve'; Jar='TrueOps-Approve.jar'},
     @{Id='approve-ref'; Jar='TrueOps-ApproveByRef.jar'},
-    @{Id='delete'; Jar='TrueOps-DeleteSite.jar'}
+    @{Id='delete'; Jar='TrueOps-DeleteSite.jar'},
+    @{Id='tk07'; Jar='TrueOps-TK07.jar'}
 )
 foreach ($module in $modules) {
     $expected.Add('modules/' + $module.Id + '/' + $module.Jar)
@@ -124,7 +125,8 @@ try {
     foreach ($module in $modules) {
         Test-NestedJar $archive ('modules/' + $module.Id + '/' + $module.Jar)
         $settings = Read-Entry $archive ($prefix + 'modules/' + $module.Id + '/settings.csv')
-        if ($settings -cne "Search,`r`nDescription,`r`n") { throw 'Release preferences must contain only empty, non-secret fields.' }
+        $expectedSettings = if ($module.Id -eq 'tk07') { "Search,TK07`r`nDescription_Approve,`r`nDescription_Reject,`r`nSearchDelayMs,2000`r`n" } elseif ($module.Id -eq 'delete') { "Search,`r`nDescription,`r`n" } else { "Search,`r`nDescription,`r`nSearchDelayMs,2000`r`n" }
+        if ($settings -cne $expectedSettings) { throw 'Release preferences must contain only fresh, non-secret fields.' }
         if ($module.Id -in @('approve-ref', 'delete')) {
             if ($archive.GetEntry($prefix + 'modules/' + $module.Id + '/Ref_No.csv').Length -ne 0) { throw 'Release reference list is not empty.' }
         }
@@ -146,4 +148,4 @@ $launcher = Join-Path $root 'dist\TrueOpsToolkit.jar'
 if ($LASTEXITCODE -ne 0) { throw 'Release updater compatibility test compilation failed.' }
 & $java '-cp' ($testClasses + ';' + $launcher) 'trueopstoolkit.ToolkitUpdateManagerTest' '--verify-release' $zipPath (Join-Path $root 'releases\update.properties')
 if ($LASTEXITCODE -ne 0) { throw 'Packaged release is not compatible with the application updater.' }
-Write-Host "PASS: $zipName checksum, update descriptor, four application versions, exact three-module file allowlist, blank preferences/reference inputs, and no TUAR folder/executable/batch/driver files."
+Write-Host "PASS: $zipName checksum, update descriptor, five application versions, exact four-module file allowlist, fresh preferences/reference inputs, and no TUAR folder/executable/batch/driver files."

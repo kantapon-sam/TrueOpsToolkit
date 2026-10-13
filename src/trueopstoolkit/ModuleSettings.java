@@ -9,7 +9,8 @@ import java.util.*;
 final class ModuleSettings {
     final ModuleSpec module;
     final Path directory;
-    String search="", description="";
+    String search="", description="", approvalDescription="", rejectionDescription="";
+    int searchDelayMs=2000;
     final List<String[]> rows=new ArrayList<String[]>();
     private final List<String> extraLines=new ArrayList<String>();
     private byte[] originalLogin,originalReferences;
@@ -32,7 +33,7 @@ final class ModuleSettings {
             }
             loadedRows.add(cells);
         }
-        search="";description="";extraLines.clear();
+        search=module==ModuleSpec.TK07?"TK07":"";description="";approvalDescription="";rejectionDescription="";searchDelayMs=2000;extraLines.clear();
         for(String line:loginText.split("\\r?\\n",-1)) {
             if(line.isEmpty())continue;
             String[] pair=line.split(",",2);
@@ -40,6 +41,9 @@ final class ModuleSettings {
             if(SharedCredentialsMigration.isCredentialKey(key))continue;
             else if("Search".equals(key))search=value;
             else if("Description".equals(key))description=value;
+            else if("SearchDelayMs".equals(key)){try{searchDelayMs=Integer.parseInt(value.trim());}catch(NumberFormatException invalid){throw new IOException("Search wait must be a whole number of milliseconds between 1000 and 10000.");}}
+            else if(module==ModuleSpec.TK07 && "Description_Approve".equals(key))approvalDescription=value;
+            else if(module==ModuleSpec.TK07 && "Description_Reject".equals(key))rejectionDescription=value;
             else extraLines.add(line);
         }
         rows.clear();rows.addAll(loadedRows);
@@ -51,10 +55,13 @@ final class ModuleSettings {
 
     void validate(boolean forRun) throws IOException {
         singleLine(search,"Search");singleLine(description,"Description");
-        if(forRun && module==ModuleSpec.APPROVE) {
+        singleLine(approvalDescription,"Approval comment");singleLine(rejectionDescription,"Rejection comment");
+        if(searchDelayMs<1000 || searchDelayMs>10000)throw new IOException("Search wait must be between 1000 and 10000 milliseconds.");
+        if(forRun && (module==ModuleSpec.APPROVE || module==ModuleSpec.TK07)) {
             if(search.trim().isEmpty())throw new IOException("Enter search criteria to identify the records to approve before starting.");
             String[] terms=search.split("&&",-1);
-            if(terms.length>2)throw new IOException("Search supports up to two conditions separated by &&.");
+            int limit=module==ModuleSpec.APPROVE?4:2;
+            if(terms.length>limit)throw new IOException("Search supports up to "+limit+" conditions.");
             for(String term:terms)if(term.trim().isEmpty())throw new IOException("Enter a search condition on both sides of &&.");
         }
         int index=0;
@@ -76,11 +83,13 @@ final class ModuleSettings {
         if(!Arrays.equals(originalLogin,read(login)) || (hasReferences() && !Arrays.equals(originalReferences,read(references))))
             throw new IOException("The files changed outside this window. Click Reload saved settings before saving over them.");
         StringBuilder content=new StringBuilder();
-        if(module==ModuleSpec.APPROVE)content.append("Search,").append(search).append("\r\nDescription,").append(description).append("\r\n");
+        if(module==ModuleSpec.TK07)content.append("Search,").append(search).append("\r\nDescription_Approve,").append(approvalDescription).append("\r\nDescription_Reject,").append(rejectionDescription).append("\r\n");
+        else if(module==ModuleSpec.APPROVE)content.append("Search,").append(search).append("\r\nDescription,").append(description).append("\r\n");
         else {
             if(!search.isEmpty())content.append("Search,").append(search).append("\r\n");
             if(!description.isEmpty())content.append("Description,").append(description).append("\r\n");
         }
+        if(module!=ModuleSpec.DELETE)content.append("SearchDelayMs,").append(searchDelayMs).append("\r\n");
         for(String line:extraLines)content.append(line).append("\r\n");
         byte[] newLogin=content.toString().getBytes(StandardCharsets.UTF_8);
         StringBuilder refs=new StringBuilder();

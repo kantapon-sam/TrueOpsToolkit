@@ -36,12 +36,23 @@ public final class ModuleSettingsTest {
                 check(module.driver(home).equals(ModuleSpec.APPROVE.driver(home)),"one driver path for every module");
             }
             ModuleSettings approve=new ModuleSettings(home,ModuleSpec.APPROVE);approve.load();
-            for(String invalid:new String[]{""," ","x&&","&&y","x&&y&&z"}){approve.search=invalid;expectFailure(() -> approve.validate(true));}
+            for(String invalid:new String[]{""," ","x&&","&&y","x&&y&&z&&d&&e"}){approve.search=invalid;expectFailure(() -> approve.validate(true));}
+            approve.search="TK08&&ATTS&&PAC&&TRUE";approve.searchDelayMs=3000;approve.validate(true);approve.save();approve.load();check("TK08&&ATTS&&PAC&&TRUE".equals(approve.search) && approve.searchDelayMs==3000,"Four AND conditions and adjustable search wait survive save/reload");
+            approve.searchDelayMs=0;expectFailure(()->approve.save());approve.load();
             ModuleSettings deletion=new ModuleSettings(home,ModuleSpec.DELETE);deletion.load();deletion.rows.clear();expectFailure(() -> deletion.validate(true));
             deletion.rows.add(new String[]{"REF-1",""});expectFailure(() -> deletion.save());
             Path ref=ModuleSpec.REF.directory(home).resolve("Ref_No.csv");Files.write(ref,"\uFEFFREF-2,Services,ไทย,มีจุลภาค\r\n\r\n".getBytes(StandardCharsets.UTF_8));
             ModuleSettings bom=new ModuleSettings(home,ModuleSpec.REF);bom.load();check(bom.rows.size()==1 && "REF-2".equals(bom.rows.get(0)[0]),"BOM and blank lines load correctly");
             migrationCases(home.resolve("migration-cases"));
+            ModuleSettings tk07=new ModuleSettings(home,ModuleSpec.TK07);tk07.load();
+            check("TK07".equals(tk07.search) && !tk07.hasReferences(),"TK07 has a safe category default and no reference CSV");
+            tk07.approvalDescription="Approved, synthetic only";tk07.rejectionDescription="Rejected, synthetic only";tk07.validate(true);tk07.save();
+            ModuleSettings tk07Reopened=new ModuleSettings(home,ModuleSpec.TK07);tk07Reopened.load();
+            check(tk07.approvalDescription.equals(tk07Reopened.approvalDescription) && tk07.rejectionDescription.equals(tk07Reopened.rejectionDescription),"TK07 retains independent approval/rejection comments with commas");
+            tk07Reopened.approvalDescription="";tk07Reopened.rejectionDescription="";tk07Reopened.validate(true);tk07Reopened.save();
+            check(!new String(Files.readAllBytes(tk07Reopened.directory.resolve("settings.csv")),StandardCharsets.UTF_8).contains("Password,"),"TK07 preferences do not include credentials");
+            tk07Reopened.search="";expectFailure(() -> tk07Reopened.validate(true));
+            tk07Reopened.search="TK07";tk07Reopened.rejectionDescription="bad\ncomment";expectFailure(() -> tk07Reopened.save());
             System.out.println("MODULE SETTINGS PASS");
         } finally {try(Stream<Path> files=Files.walk(home)){files.sorted(Comparator.reverseOrder()).forEach(path -> {try{Files.deleteIfExists(path);}catch(IOException ex){throw new RuntimeException(ex);}});}}
     }
@@ -49,8 +60,9 @@ public final class ModuleSettingsTest {
         Path overlay=cases.resolve("overlay");Files.createDirectories(overlay);
         byte[] legacy="Search,legacy&&keep\r\nDescription,ไทย,comma\r\n".getBytes(StandardCharsets.UTF_8);
         Files.write(overlay.resolve("Login.txt"),legacy);
-        Files.write(overlay.resolve("settings.csv"),"\uFEFFSearch,\r\nDescription,  \r\n".getBytes(StandardCharsets.UTF_8));
+        Files.write(overlay.resolve("settings.csv"),"\uFEFFSearch,\r\nDescription,  \r\nSearchDelayMs,2000\r\n".getBytes(StandardCharsets.UTF_8));
         check(Arrays.equals(legacy,Files.readAllBytes(SettingsFiles.resolve(overlay))) && !Files.exists(overlay.resolve("Login.txt")),"an empty release template preserves meaningful legacy preferences");
+        Path customDelay=cases.resolve("custom-delay");Files.createDirectories(customDelay);byte[] waitOnly="Search,\nDescription,\nSearchDelayMs,3500\n".getBytes(StandardCharsets.UTF_8);Files.write(customDelay.resolve("settings.csv"),waitOnly);Files.write(customDelay.resolve("Login.txt"),legacy);SettingsFiles.resolve(customDelay);check(Arrays.equals(waitOnly,Files.readAllBytes(customDelay.resolve("settings.csv"))) && Arrays.equals(legacy,Files.readAllBytes(customDelay.resolve("settings-legacy.csv"))),"a customized wait remains authoritative while legacy preferences are preserved separately");
         Path conflict=cases.resolve("conflict");Files.createDirectories(conflict);
         byte[] current="Search,current\r\nDescription,new,comma\r\n".getBytes(StandardCharsets.UTF_8),existing="Search,existing-backup\n".getBytes(StandardCharsets.UTF_8);
         Files.write(conflict.resolve("Login.txt"),legacy);Files.write(conflict.resolve("settings.csv"),current);Files.write(conflict.resolve("settings-legacy.csv"),existing);

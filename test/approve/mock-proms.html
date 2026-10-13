@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><title>Loopback PROMS workflow fixture</title>
+<style>body{font:16px sans-serif;margin:20px}td{padding:8px}li{display:inline-block;padding:5px}.active{background:#ddd}.disabled{opacity:.5}.modal{position:fixed;left:25%;top:20%;padding:25px;background:#fff;border:2px solid #456;z-index:5}button,input,textarea{padding:8px}a{cursor:pointer}</style></head>
+<body><h1>Synthetic pending requests</h1><input id="txtSearch" aria-label="Search">
+<table id="unrelated"><tr><td data-title-text="Project Name">Unrelated report column</td></tr></table>
+<table id="pending"><tbody id="rows"></tbody></table><ul id="pager"></ul>
+<button id="approve" ng-click="approvalAction('Approve')" onclick="openApproval()">Approve</button>
+<div id="detail"></div>
+<div id="dialogs"></div>
+<script>
+'use strict';
+var state, page = 1, loaded = false, generation = 0, detailRef = null, detailType = null, lastRowMarkup = null;
+window.fixture = JSON.parse(sessionStorage.getItem('fixtureMetrics') || 'null') || {pages: [], modalOpens: 0, confirmationClicks: 0, successClicks: 0, wrongSelections: [], detailVisits: [], filterResponses: 0, noiseResponses: 0, angularReloads: 0};
+function saveMetrics() { sessionStorage.setItem('fixtureMetrics',JSON.stringify(window.fixture)); }
+function escapeHtml(value) { return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function filtered() {
+    var query = document.getElementById('txtSearch').value.trim().toLowerCase();
+    return state.rows.filter(function(row) { return !query || (row.ref+' '+row.project+' '+row.requester+' '+row.type).toLowerCase().indexOf(query) >= 0; });
+}
+function link(kind, value, text, disabled, active) {
+    return '<li class="'+(disabled?'disabled ':'')+(active?'active':'')+'"><a ng-switch-when="'+kind+'" data-page="'+value+'"'+(disabled?' aria-disabled="true"':'')+' onclick="'+(disabled?'return false':'turnPage('+value+')')+'"><span>'+text+'</span></a></li>';
+}
+function renderPager() {
+    var total = Math.max(1, Math.ceil(filtered().length/state.pageSize));
+    if (!state.pager) { document.getElementById('pager').innerHTML = ''; return; }
+    var start = Math.max(1, Math.min(page-1,total-2)), end = Math.min(total,start+2);
+    var html = link('first',1,'1',page===1,false);
+    html += link('previous',Math.max(1,page-1),'‹',page===1,false);
+    for (var number = start; number <= end; number++) html += link('page',number,String(number),false,number===page);
+    html += link('next',Math.min(total,page+1),'›',page===total,false);
+    html += link('last',total,String(total),page===total,false);
+    document.getElementById('pager').innerHTML = html;
+}
+function renderRows() {
+    var sourcePage = state.mode==='duplicate-pages' ? 1 : page;
+    var rows = filtered().slice((sourcePage-1)*state.pageSize,sourcePage*state.pageSize);
+    var markup = rows.map(function(row) {
+        return '<tr data-ref="'+escapeHtml(row.ref)+'" data-type="'+escapeHtml(row.type)+'"><td><input type="checkbox" ng-model="row.checked"></td>'+
+            '<td data-title-text="Request No."><a onclick="enterDetail(this.closest(\'tr\').getAttribute(\'data-ref\'),this.closest(\'tr\').getAttribute(\'data-type\'))">'+escapeHtml(row.ref)+'</a></td>'+
+            '<td data-title-text="Project Name">'+escapeHtml(row.project)+'</td>'+
+            '<td data-title-text="Requester">'+escapeHtml(row.requester)+'</td>'+
+            '<td data-title-text="Request Type" title="\'Request Type\'"><div>'+escapeHtml(row.type)+'</div></td></tr>';
+    }).join('');
+    if (!markup) markup = '<tr class="no-records"><td colspan="5">No pending records</td></tr>';
+    if (state.mode.indexOf('reused-rows')<0 || markup!==lastRowMarkup) document.getElementById('rows').innerHTML = markup;
+    lastRowMarkup = markup;
+    window.fixture.pages.push(page);
+    saveMetrics();
+    loaded = true;
+}
+function turnPage(value) {
+    page = value;
+    loaded = false;
+    var ownGeneration = ++generation;
+    renderPager();
+    // The active page changes before Angular replaces the old rows, exposing stale-page bugs.
+    if (state.mode.indexOf('reused-rows')>=0) {
+        fetch('/noise').then(function(response) { return response.json(); }).then(function() { window.fixture.noiseResponses++; saveMetrics(); });
+        fetch('/state?slow_filter=true&q='+encodeURIComponent(document.getElementById('txtSearch').value)).then(function(response) { return response.json(); }).then(function(value) {
+            if (ownGeneration===generation) { state=value; window.fixture.filterResponses++; renderRows(); }
+        });
+    } else setTimeout(function() { if (ownGeneration===generation) renderRows(); },state.mode.indexOf('slow-search')>=0 ? 2300 : 700);
+}
+function refresh() {
+    loaded = false;
+    fetch('/state').then(function(response) { return response.json(); }).then(function(value) {
+        state = value; page = 1; installAngularFixture(); renderPager(); renderRows();
+    });
+}
+document.getElementById('txtSearch').addEventListener('keydown',function(event) {
+    if (event.key==='Enter') {
+        event.preventDefault();
+        if (state.mode.indexOf('angular-reused-rows')>=0) window.fixtureScope.searchTablePA();
+        else turnPage(1);
+    }
+});
+function installAngularFixture() {
+    if (state.mode.indexOf('angular-reused-rows')<0 || window.angular) return;
+    var input = document.getElementById('txtSearch');
+    function nativeRows(rows) { return rows.map(function(row) { return {requestNo: row.ref, projectName: row.project, requesterName: row.requester, typeDisplay: row.type}; }); }
+    var scope = {txtSearch: input.value, tableTmp: nativeRows(state.rows), pa: {tasks: nativeRows(state.rows)}, tabPA: {}};
+    var model = {$viewValue: input.value, $commitViewValue: function() { model.$viewValue=input.value; scope.txtSearch=input.value; }};
+    scope.tabPA.page = function(value) { page=value; renderPager(); return scope.tabPA; };
+    scope.tabPA.total = function() { return scope.pa.tasks.length; };
+    scope.tabPA.reload = function() {
+        return new Promise(function(resolve) {
+            setTimeout(function() {
+                renderRows(); window.fixture.angularReloads++; saveMetrics(); resolve(scope.pa.tasks);
+            },2300);
+        });
+    };
+    scope.searchTablePA = function() { scope.pa.tasks=nativeRows(filtered()); scope.tabPA.page(1); return scope.tabPA.reload(); };
+    window.fixtureScope = scope;
+    window.angular = {element: function() { return {scope: function() { return scope; }, controller: function(name) { return name==='ngModel' ? model : null; }, injector: function() { return null; }}; }};
+}
+function openApproval() {
+    var selectedRows = Array.prototype.slice.call(document.querySelectorAll('#rows input:checked')).map(function(box) { return box.closest('tr'); });
+    var selected = detailRef ? [detailRef] : selectedRows.map(function(row) { return row.getAttribute('data-ref'); });
+    if (selected.length!==1) { window.fixture.wrongSelections.push(selected); saveMetrics(); return; }
+    window.fixture.modalOpens++;
+    saveMetrics();
+    var missing = state.mode.indexOf('missing-confirm')>=0 ? '' : '<button ng-click="paOkModal()" onclick="confirmApproval()">OK</button>';
+    if (state.mode.indexOf('ambiguous-confirm')>=0) missing += '<button ng-click="paOkModal()" onclick="confirmApproval()">Duplicate OK</button>';
+    var type = detailRef ? detailType : selectedRows[0].getAttribute('data-type');
+    var extraComment = state.mode.indexOf('ambiguous-comment')>=0 ? '<textarea ng-model="commentDesc">Unrelated visible comment</textarea>' : '';
+    var form = '<div class="modal" id="approvalModal" data-ref="'+escapeHtml(selected[0])+'" data-type="'+escapeHtml(type)+'"><h2>Approval comment</h2><textarea ng-model="commentDesc">Old stale comment</textarea>'+extraComment+missing+'</div>';
+    if (state.mode.indexOf('ambiguous-form')>=0) form += form.replace('id="approvalModal"','id="approvalModalSecond"');
+    document.getElementById('dialogs').innerHTML = form;
+}
+function confirmApproval() {
+    window.fixture.confirmationClicks++;
+    saveMetrics();
+    var modal = document.getElementById('approvalModal');
+    var body = 'ref='+encodeURIComponent(modal.getAttribute('data-ref'))+'&type='+encodeURIComponent(modal.getAttribute('data-type'))+'&description='+encodeURIComponent(modal.querySelector('textarea').value);
+    fetch('/approve',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(response) { return response.json(); }).then(function(value) {
+        setTimeout(function() {
+            if (value.ok) {
+                var response = '<div class="modal modal-success alert-success" id="successModal"><h2>Success</h2><p>'+escapeHtml(value.message)+'</p><button onclick="dismissSuccess()"><i class="glyphicon glyphicon-ok"></i>OK</button></div>';
+                if (state.mode.indexOf('ambiguous-ack')>=0) response += response.replace('id="successModal"','id="successModalSecond"');
+                document.getElementById('dialogs').innerHTML = response;
+            } else document.getElementById('dialogs').innerHTML = '<div class="modal alert-danger"><h2>Approval failed</h2><p>'+escapeHtml(value.message)+'</p><button onclick="document.getElementById(\'dialogs\').innerHTML=\'\'">Close</button></div>';
+        },450);
+    });
+}
+function dismissSuccess() { window.fixture.successClicks++; saveMetrics(); document.getElementById('dialogs').innerHTML=''; refresh(); }
+function enterDetail(ref,type) {
+    detailRef = ref;
+    detailType = type;
+    window.fixture.detailVisits.push(ref);
+    saveMetrics();
+    document.getElementById('pending').style.display='none';
+    document.getElementById('pager').style.display='none';
+    document.getElementById('txtSearch').style.display='none';
+    document.getElementById('unrelated').style.display='none';
+    document.getElementById('detail').innerHTML = '<div class="box"><div class="box-header"><h2 class="box-title">Work Order BOQ</h2><button data-widget="collapse" onclick="document.getElementById(\'boqPanel\').style.display=\'block\'">Expand</button></div><div id="boqPanel" style="display:none"><a id="linkTurnkey" onclick="showTurnkey()">FBOQ:Turnkey</a><div id="turnkey"></div></div></div>';
+}
+function showTurnkey() { document.getElementById('turnkey').innerHTML = '<a ng-click="loadFboqTkDetail(row)" onclick="loadBoq()">Synthetic FBOQ detail</a><div id="boqTable"></div>'; }
+function loadBoq() {
+    var row = state.rows.filter(function(value) { return value.ref===detailRef && value.type===detailType; })[0];
+    setTimeout(function() {
+        document.getElementById('boqTable').innerHTML = '<table class="ng-table"><thead><tr><th><span>C-Part Type</span></th></tr></thead><tbody>'+row.boq.map(function(part) { return '<tr><td title="\'C-Part Type\'"><div class="ng-binding">'+escapeHtml(part)+'</div></td></tr>'; }).join('')+'</tbody></table>';
+        if (state.mode.indexOf('paged-boq')>=0) document.getElementById('boqTable').innerHTML += '<div class="ng-table-pager"><ul class="ng-table-pagination"><li class="active"><a data-page="1" onclick="renderBoqPage(1)">1</a></li><li><a data-page="2" onclick="renderBoqPage(2)">2</a></li><li><a ng-switch-when="next" onclick="renderBoqPage(2)">›</a></li></ul></div>';
+        if (state.mode.indexOf('single-page-boq')>=0) document.getElementById('boqTable').innerHTML += '<div class="ng-table-pager"><ul class="ng-table-pagination"><li class="active"><a data-page="1" onclick="renderBoqPage(1)">1</a></li><li class="disabled"><a ng-switch-when="next" aria-disabled="true" onclick="return false">›</a></li><li class="disabled"><a ng-switch-when="last" aria-disabled="true" onclick="return false">1</a></li></ul></div>';
+    },700);
+}
+function renderBoqPage(number) {
+    var row = state.rows.filter(function(value) { return value.ref===detailRef && value.type===detailType; })[0];
+    var parts = number===1 ? row.boq : ['Materials'];
+    document.querySelector('#boqTable tbody').innerHTML = parts.map(function(part) { return '<tr><td title="\'C-Part Type\'"><div class="ng-binding">'+escapeHtml(part)+'</div></td></tr>'; }).join('');
+}
+refresh();
+</script></body></html>

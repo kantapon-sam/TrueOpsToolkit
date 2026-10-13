@@ -14,6 +14,7 @@ import java.util.stream.Stream;
 public final class PromsSettingsTest {
     private static final String PASSWORD = "  รหัส,synthetic,only  ";
     private static int checks;
+    private static boolean fourTerms;
 
     public static void main(String[] args) throws Exception {
         if (args.length != 1 || !("approve".equals(args[0])
@@ -21,6 +22,7 @@ public final class PromsSettingsTest {
             throw new IllegalArgumentException("Expected module id: approve, approve-ref, or delete.");
         }
         Path directory = Files.createTempDirectory("trueops-proms-settings-test-");
+        fourTerms="approve".equals(args[0]);
         try {
             Path login = directory.resolve("settings.csv");
             testLogin(login);
@@ -72,13 +74,15 @@ public final class PromsSettingsTest {
     private static void testSearch(Path login) throws Exception {
         String credentials = "User,synthetic-user\nPassword," + PASSWORD + "\n";
         for (String search : new String[] {"", "   ", "&&", "first&&", "&&second",
-                "first&&   ", "first&&second&&third"}) {
+                "first&&   ", "first&&second&&third&&fourth&&fifth"}) {
             failLogin(login, credentials + "Search," + search + "\n", true, "Search");
         }
         failLogin(login, credentials, true, "Search");
         write(login, credentials + "Search,first&&second\n");
         equal("first&&second", PromsSettings.readLogin(login.toString(), true).get("Search"),
                 "Two non-empty search terms");
+        if(fourTerms){write(login,credentials+"Search,TK08&&ATTS&&PAC&&TRUE\n");equal("TK08&&ATTS&&PAC&&TRUE",PromsSettings.readLogin(login.toString(),true).get("Search"),"Four conditions retained");}
+        else failLogin(login,credentials+"Search,first&&second&&third\n",true,"Search");
         write(login, credentials + "Search,  ค้นหา  \n");
         equal("ค้นหา", PromsSettings.readLogin(login.toString(), true).get("Search"), "Search edge whitespace");
     }

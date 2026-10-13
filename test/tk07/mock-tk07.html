@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Synthetic TK07 portal</title>
+<style>body{font:16px sans-serif;margin:20px}td{padding:8px}button,a,input,textarea{padding:8px}.modal{position:fixed;left:15%;top:15%;background:white;border:1px solid #555;padding:20px}a{cursor:pointer}</style></head>
+<body><input id="txtSearch"><table><tbody id="rows"></tbody></table><div id="detail"></div><div id="dialogs"></div>
+<script>
+var state, detailRef, generation=0, activityOwner, activityRow, actualPanelOpened=false;
+window.fixture={modalOpens:0,detailVisits:[]};
+function actualActivity(){return state.mode.indexOf('actual-activity')>=0;}
+function hasMode(name){return state.mode.indexOf(name)>=0;}
+function escapeHtml(value){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function refresh(query){var own=++generation;return fetch('/state?query='+encodeURIComponent(query||'')).then(function(response){return response.json();}).then(function(value){if(own!==generation)return;state=value;document.getElementById('rows').innerHTML=state.rows.map(function(row){return '<tr><td data-title-text="Request No."><a onclick="detail(this.textContent)">'+escapeHtml(row.ref)+'</a></td><td data-title-text="Project Name">'+escapeHtml(row.project)+'</td><td data-title-text="Requester">Synthetic requester</td><td title="\'Request Type\'"><div>'+escapeHtml(row.type)+'</div></td></tr>';}).join('');});}
+document.getElementById('txtSearch').addEventListener('keydown',function(event){if(event.key==='Enter'){event.preventDefault();refresh(this.value);}});
+function detail(ref){
+ detailRef=ref;window.fixture.detailVisits.push(ref);document.querySelector('table').style.display='none';document.getElementById('txtSearch').style.display='none';
+ document.getElementById('detail').innerHTML='<div class="box-header"><h2>Activity/Milestone</h2><button data-widget="collapse" onclick="document.getElementById(\'activity\').style.display=\'block\'">Expand</button></div><div id="activity" style="display:none"><a id="tk07Activity" '+(actualActivity()?'ng-click="selectActivity(a)" onclick="selectFixtureActivity(this)"':'onclick="showActivity()"')+'>NT_IE_TK07</a><div id="activityDetail"></div></div><button ng-click="approvalAction(\'APPROVE_ALT\')" onclick="openDecision(\'approve\')">Approve</button><button ng-click="approvalAction(\'REJECT_ALT\')" onclick="openDecision(\'reject\')">Reject</button>';
+ if(actualActivity())setupAngularActivity();
+}
+function setupAngularActivity(){
+ actualPanelOpened=false;
+ activityRow=state.rows.filter(function(row){return row.ref===detailRef;})[0];
+ var root={attachmentsAct:hasMode('stale-empty')?[]:[{attachmentId:'cached',fileName:'Cached Design.pdf'}]};
+ var parent={activeTask:{requestNo:hasMode('wrong-request-context')?'ANOTHER-REQUEST':detailRef,woId:hasMode('wrong-current-wo')?'another-work-order':activityRow.woId},$root:root};
+ activityOwner={woModel:{woId:hasMode('wrong-owner-wo')?'another-work-order':activityRow.woId},$parent:parent,$root:root};
+ activityOwner.selectActivity=function(data){
+  this.activityTemp=hasMode('wrong-selected-act-id')?Object.assign({},data,{actId:data.actId+'-wrong'}):hasMode('wrong-code')?Object.assign({},data,{actCode:'OTHER_INTERNAL_CODE'}):hasMode('wrong-description')?Object.assign({},data,{actDesc:'OTHER_INTERNAL_DESCRIPTION'}):hasMode('wrong-step-after-selection')?Object.assign({},data,{woStep:'OTHER_ACTIVITY'}):hasMode('selected-clone')?Object.assign({},data):data;
+  showActivity();
+  actualAttachments(data);
+  return 'original-selectActivity-return';
+ };
+ var item={actCode:'SYNTHETIC_INTERNAL_CODE',actDesc:'Synthetic internal activity description',woStep:hasMode('wrong-label')?'UNRELATED_ACTIVITY':'NT_IE_TK07',actId:activityRow.actId,woId:hasMode('wrong-data-wo')?'another-work-order':activityRow.woId};
+ document.getElementById('tk07Activity').__scope={$parent:activityOwner,a:item};
+ window.angular={element:function(node){return {scope:function(){return node&&node.__scope;}};}};
+ window.fixture.activityOwner=activityOwner;
+}
+function selectFixtureActivity(link){var scope=link.__scope;window.fixture.activityReturn=scope.$parent.selectActivity(hasMode('wrong-activity-object')?Object.assign({},scope.a):scope.a);}
+function showActivity(){document.getElementById('activityDetail').innerHTML='<a data-target="#activity_attachment" onclick="attachments()">Attachment</a><div id="attachmentHolder"></div>';if(state.mode.indexOf('slow-attachments')>=0||state.mode.indexOf('unknown-attachments')>=0)document.getElementById('attachmentHolder').innerHTML='<div id="activity_attachment" class="modal">'+(state.mode.indexOf('stale-empty')>=0?'<p>No attachments</p>':'<table><tr ng-repeat="attachment in attachmentsAct"><td>0</td><td>Cached Design.pdf</td><td></td></tr></table>')+'</div>';}
+function renderAttachments(names){
+ document.getElementById('attachmentHolder').innerHTML='<div id="activity_attachment" class="modal"><button data-dismiss="modal" onclick="this.parentNode.style.display=\'none\'">Close</button>'+(names.length?'<table><tbody>'+names.map(function(name,index){return '<tr ng-repeat="attachment in attachmentsAct"><td>'+index+'</td><td>'+escapeHtml(name)+'</td><td><a href="/pdf?ref='+encodeURIComponent(detailRef)+'" download><i class="fa-download"></i>Download</a></td></tr>';}).join('')+'</tbody></table>':'<p>No attachments</p>')+'</div>';
+ if(actualActivity()&&!actualPanelOpened)document.getElementById('activity_attachment').style.display='none';
+}
+function actualAttachments(data){
+ renderAttachments(hasMode('stale-empty')?[]:['Cached Design.pdf']);
+ var route='/proms/pmsAttachmentController/list/wo/'+encodeURIComponent(data.actId+(hasMode('wrong-route-act-id')?'-wrong':''));
+ if(hasMode('query-route'))route+='?irrelevant=true';
+ var request=hasMode('xhr')?new Promise(function(resolve,reject){var xhr=new XMLHttpRequest();xhr.open('GET',route,true);xhr.onreadystatechange=function(){if(xhr.readyState===4){try{resolve(JSON.parse(xhr.responseText));}catch(error){reject(error);}}};xhr.send();}):fetch(route,hasMode('irrelevant-post')?{method:'POST'}:undefined).then(function(response){return response.json();});
+ if(hasMode('pre-response-empty-delayed-rfs')){activityOwner.$root.attachmentsAct=[];renderAttachments([]);}
+ request.then(function(value){
+  var items=Array.isArray(value)?value:[];
+  if(hasMode('partial-response-list'))items=items.filter(function(item){return item.fileName.indexOf('RFS')<0;});
+  if(hasMode('empty-subset-response'))items=[];
+  if(!hasMode('stale-array'))activityOwner.$root.attachmentsAct=items;
+  if(hasMode('array-payload-mismatch')&&items.length)activityOwner.$root.attachmentsAct=[{attachmentId:items[0].attachmentId,fileName:'Cached Design.pdf'}];
+  if(hasMode('no-render'))return;
+  var render=function(){var names=items.map(function(item){return item.fileName;});if(hasMode('dom-name-mismatch')&&names.length)names[0]='Cached Design.pdf';renderAttachments(names);};
+  if(hasMode('pre-response-empty-delayed-rfs'))setTimeout(render,2300);else render();
+ });
+}
+function attachments(){
+ if(actualActivity()){actualPanelOpened=true;var panel=document.getElementById('activity_attachment');if(panel)panel.style.display='block';return;}
+ if(hasMode('unknown-attachments'))return;
+ if(hasMode('queued-stale-no-render'))renderAttachments(['Cached Design.pdf']);
+ var request=fetch('/attachments?ref='+encodeURIComponent(detailRef));
+ if(hasMode('pre-response-empty-delayed-rfs'))renderAttachments([]);
+ request.then(function(response){return response.json();}).then(function(value){
+  if(hasMode('queued-stale-no-render'))return;
+  var render=function(){renderAttachments(value.names);};
+  if(hasMode('pre-response-empty-delayed-rfs'))setTimeout(render,2300);else render();
+ });
+}
+function openDecision(action){window.fixture.modalOpens++;var confirm=state.mode.indexOf('missing-confirm')>=0?'':'<button ng-click="paOkModal()" onclick="confirmDecision()">OK</button>';document.getElementById('dialogs').innerHTML='<div id="comment" class="modal" data-action="'+action+'"><textarea ng-model="commentDesc">Stale previous comment</textarea>'+confirm+'</div>';}
+function confirmDecision(){var comment=document.getElementById('comment');var body='ref='+encodeURIComponent(detailRef)+'&action='+encodeURIComponent(comment.getAttribute('data-action'))+'&description='+encodeURIComponent(comment.querySelector('textarea').value);fetch('/decision',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(response){return response.json();}).then(function(value){setTimeout(function(){document.getElementById('dialogs').innerHTML=value.ok?'<div class="modal modal-success alert-success"><h2>Success</h2><button onclick="dismiss()"><i class="glyphicon glyphicon-ok"></i>OK</button></div>':'<div class="modal alert-danger">Decision failed</div>';},300);});}
+function dismiss(){document.getElementById('dialogs').innerHTML='';}
+refresh('');
+</script></body></html>

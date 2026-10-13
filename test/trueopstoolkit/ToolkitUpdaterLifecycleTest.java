@@ -353,8 +353,8 @@ public final class ToolkitUpdaterLifecycleTest {
             entry(zip, "TrueOpsToolkit.jar", launcher);
             entry(zip, "version.properties", bytes("app.version=" + VERSION + "\n"));
             for (String doc : new String[] { "README.md", "CHANGELOG.md", "RELEASE.md" }) entry(zip, doc, bytes("new docs"));
-            String[] modules = { "approve", "approve-ref", "delete" };
-            String[] jars = { "TrueOps-Approve.jar", "TrueOps-ApproveByRef.jar", "TrueOps-DeleteSite.jar" };
+            String[] modules = { "approve", "approve-ref", "delete", "tk07" };
+            String[] jars = { "TrueOps-Approve.jar", "TrueOps-ApproveByRef.jar", "TrueOps-DeleteSite.jar", "TrueOps-TK07.jar" };
             for (int i = 0; i < modules.length; i++) {
                 String prefix = "modules/" + modules[i] + "/";
                 entry(zip, prefix + jars[i], jar(VERSION, false));

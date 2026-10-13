@@ -15,7 +15,7 @@ public final class SharedCredentialsDialog {
     public static boolean showDialog(Component parent,Path home) {
         final JDialog dialog=new JDialog(parent instanceof Window?(Window)parent:SwingUtilities.getWindowAncestor(parent),"Shared account | TrueOps Toolkit",Dialog.ModalityType.APPLICATION_MODAL);
         JPanel body=new JPanel(new BorderLayout(0,16));body.setBorder(new EmptyBorder(20,22,20,22));
-        body.add(Ui.note("This account is shared by all three PROMS tools.\nWindows encrypts it for your user account. settings.csv stores only tool preferences."),BorderLayout.NORTH);
+        body.add(Ui.note("This account is shared by all four PROMS tools.\nWindows encrypts it for your user account. settings.csv stores only tool preferences."),BorderLayout.NORTH);
         JTextField username=new JTextField(28);JPasswordField password=new JPasswordField(28);
         JLabel passwordNote=Ui.label("Enter your password",12,Ui.MUTED,false);JCheckBox show=new JCheckBox("Show password");char echo=password.getEchoChar();
         show.addActionListener(e -> password.setEchoChar(show.isSelected()?(char)0:echo));

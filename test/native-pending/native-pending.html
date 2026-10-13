@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Synthetic native pending snapshot</title>
+<style>td{padding:5px}li{display:inline-block;padding:4px}.active{background:#ddd}.disabled{opacity:.5}a{cursor:pointer}</style></head>
+<body><input id="txtSearch"><table><tbody id="rows"></tbody></table><ul id="pager"></ul>
+<script>
+'use strict';
+var state,page=1;
+window.fixture={pagerClicks:0,draws:[],searchCalls:0,prematureSearchCalls:0};window.jQuery={active:1};
+var scope={txtSearch:'',pa:{tasks:[]},tableTmp:[],tabPA:{data:[]},initialLoading:true};
+function escapeHtml(value){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function metadata(row){return [row.requestNo,row.projectName,row.requesterName||row.fallbackRequester,row.typeDisplay].join(' ').toLowerCase();}
+function projectDisplay(row){return state.mode==='decorated-project'?row.projectCode+' : '+row.projectName:row.projectName;}
+scope.tabPA.total=function(){return scope.pa.tasks.length+(state&&state.mode==='count-mismatch'?1:0);};
+scope.tabPA.settings=function(){return {$loading:scope.initialLoading};};
+scope.tabPA.page=function(number){if(typeof number==='number')page=number;return page;};
+function link(kind,number,text,disabled,active){return '<li class="'+(disabled?'disabled ':'')+(active?'active':'')+'"><a ng-switch-when="'+kind+'"'+(disabled?' aria-disabled="true"':'')+' onclick="'+(disabled?'return false':'turnPage('+number+')')+'"><span>'+text+'</span></a></li>';}
+function draw(){
+  var data=scope.pa.tasks.slice((page-1)*state.pageSize,page*state.pageSize);scope.tabPA.data=data;
+  document.getElementById('rows').innerHTML=data.length?data.map(function(row){return '<tr><td><input type="checkbox" ng-model="row.checked"></td><td data-title-text="Request No."><a>'+escapeHtml(row.requestNo)+'</a></td><td data-title-text="Project Name">'+escapeHtml(projectDisplay(row))+'</td><td data-title-text="Requester">'+escapeHtml(row.requesterName||row.fallbackRequester)+'</td><td data-title-text="Request Type" title="\'Request Type\'"><div>'+escapeHtml(row.typeDisplay)+'</div></td></tr>';}).join(''):'<tr><td>No records</td></tr>';
+  var total=Math.max(1,Math.ceil(scope.pa.tasks.length/state.pageSize)),html=link('first',1,'1',page===1,false);
+  for(var n=Math.max(1,page-1);n<=Math.min(total,page+1);n++)html+=link('page',n,String(n),false,n===page);
+  html+=link('next',Math.min(total,page+1),'Next',page===total,false)+link('last',total,String(total),page===total,false);
+  document.getElementById('pager').innerHTML=html;window.fixture.draws.push(page);
+  if(state.mode==='hidden-dom'){document.getElementById('rows').style.display='none';document.getElementById('pager').style.display='none';}
+}
+scope.tabPA.reload=function(){return new Promise(function(resolve){setTimeout(function(){draw();resolve(scope.tabPA.data);},100);});};
+scope.searchTablePA=function(){window.fixture.searchCalls++;if(scope.initialLoading)window.fixture.prematureSearchCalls++;scope.pa.tasks=scope.tableTmp.filter(function(row){return metadata(row).indexOf(scope.txtSearch.toLowerCase())>=0;});scope.tabPA.page(1);return scope.tabPA.reload();};
+function turnPage(number){window.fixture.pagerClicks++;scope.tabPA.page(number);scope.tabPA.reload();}
+var ngModel={get $viewValue(){return document.getElementById('txtSearch').value;},$commitViewValue:function(){scope.txtSearch=this.$viewValue;}};
+window.angular={element:function(){return {scope:function(){return scope;},controller:function(){return ngModel;},injector:function(){return {get:function(){return {pendingRequests:[]};}};}};}};
+document.getElementById('txtSearch').addEventListener('keyup',function(){scope.txtSearch=this.value;scope.searchTablePA();});
+fetch('/state').then(function(response){return response.json();}).then(function(value){state=value;function initialLoad(){scope.tableTmp=state.rows.map(function(row){var item={requestNo:row.ref,projectName:row.project,projectCode:'SYNTHETIC-CODE',requesterName:row.requester,typeDisplay:row.type};if(state.mode==='schema-mismatch'){item.fallbackRequester=item.requesterName;delete item.requesterName;}return item;});scope.pa.tasks=scope.tableTmp.slice();scope.tabPA.reload().then(function(){scope.initialLoading=false;window.jQuery.active=0;});}if(state.mode==='late-initial-load')setTimeout(initialLoad,2300);else initialLoad();});
+</script></body></html>

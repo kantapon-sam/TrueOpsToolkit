@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.0 — 2026-10-13
+
+- Add TK07 Review with shared encrypted login and ChromeDriver, editable Search and approval/rejection comments, and isolated PDF downloads.
+- Preserve the canonical TK07 project/site rules. Skip multiple or non-PDF RFS attachments, unreadable/image-only PDFs, and unverified loading; stop on an unconfirmed download before reviewing another request. Keep original PDFs and exclude PDF contents from logs.
+- Add one shared External / Internal portal mode, including the internal sign-in layout and VPN endpoint. Preserve the mode during application updates.
+- Automatically click one unique Sign in control and hand CAPTCHA completion to the user when needed; never retry a failed sign-in automatically.
+- Replace the joined Search editor with four optional AND condition fields in Approve PROMS, requiring at least one; TK07 Review has two fields. Every filled condition must match. Preserve the existing `&&` file format.
+- Add editable `SearchDelayMs` from 1000 to 10000 milliseconds, defaulting to 2000. Wait for the initial pending data and actual current search response as well as the minimum settling delay.
+- Read the supported PROMS page's verified complete filtered dataset directly, avoiding a walk through every page before approval. Retain checked pagination for unsupported page layouts.
+- Fix Approve PROMS Search matching so lowercase search text also matches uppercase request data.
+- Scope standalone `TK` plus digits search codes to complete Request Type category tokens before the site suffix; exclude similar codes and matches in project, requester, or site text. Other terms retain row-text search, and every filled AND condition must match.
+- Match Approve by Ref using complete reference identity and request-category tokens, ignoring letter case; keep the non-empty, Services-only FBOQ eligibility rule.
+- Stop before approval when the C-Part Type table explicitly has additional pages; allow unpaginated and single-page FBOQ tables.
+- Wait for the current filtered result to finish loading, collect unique candidates, and select only the exact reference intended for approval. Unsupported page layouts retain response checks and checked pagination.
+- Return to the pending list for each reference and retain each input row's Description.
+- Count an approval only after a confirmation response and a fresh pending-list search show that the exact request is no longer pending.
+- Show scanned, matched, approved, skipped, and failed progress; report no-match runs and partial failures instead of presenting them as confirmed approvals.
+- Add local Selenium and generated-PDF fixtures. Actual Internal checks through VPN were read-only: 45 case-independent Search matches, one exact reference with four Services-only FBOQ rows, and no pending TK07 matches. No real requests were approved, rejected, or deleted during testing.
+- Retain the visible update installer, automatic reopen, encrypted shared account, and automatic ChromeDriver preparation.
+
 ## 1.0.2 — 2026-10-13
 
 - Show a visible installation progress dialog after the Toolkit closes, including waiting for application files, update verification, installation, and rollback if needed.

@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><title>Loopback synthetic login</title>
+<style>body{font:16px sans-serif;margin:25px}input,button{padding:8px;margin:5px}.alert-danger{color:#b00}</style></head>
+<body><h1>Synthetic login</h1><label>Username<input id="username" value="stale-user"></label>
+<label>Password<input id="password" type="password" value="stale-password"></label>
+@BUTTONS@<div id="challenge"></div><div id="error"></div>
+<script>
+'use strict';
+var loginMode='@MODE@';
+window.loginFixture={clicks:0};
+function sendLogin() {
+    window.loginFixture.clicks++;
+    var captcha=document.getElementById('captchaInput');
+    var body='username='+encodeURIComponent(document.getElementById('username').value)+'&password='+encodeURIComponent(document.getElementById('password').value)+'&captcha='+encodeURIComponent(captcha?captcha.value:'');
+    fetch('/attempt',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(response){return response.json();}).then(function(result){
+        if(result.ok) setTimeout(function(){location.href='/proms/pendingapprove';},loginMode==='delayed'?1800:150);
+        else if(result.captcha) document.getElementById('challenge').innerHTML='<div id="captchaBlock"><label>Synthetic CAPTCHA<input id="captchaInput" name="captcha"></label></div>';
+        else document.getElementById('error').innerHTML='<p class="alert-danger">'+result.message+'</p>';
+    });
+}
+</script></body></html>

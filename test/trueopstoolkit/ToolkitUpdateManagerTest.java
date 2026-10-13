@@ -28,8 +28,8 @@ import java.util.zip.ZipOutputStream;
 public final class ToolkitUpdateManagerTest {
     private static final String NEW_VERSION = "1.1.0";
     private static final String ROOT = "TrueOpsToolkit-" + NEW_VERSION;
-    private static final String[] MODULES = { "approve", "approve-ref", "delete" };
-    private static final String[] JARS = { "TrueOps-Approve.jar", "TrueOps-ApproveByRef.jar", "TrueOps-DeleteSite.jar" };
+    private static final String[] MODULES = { "approve", "approve-ref", "delete", "tk07" };
+    private static final String[] JARS = { "TrueOps-Approve.jar", "TrueOps-ApproveByRef.jar", "TrueOps-DeleteSite.jar", "TrueOps-TK07.jar" };
     private static int checks;
 
     public static void main(String[] args) throws Exception {
@@ -111,7 +111,7 @@ public final class ToolkitUpdateManagerTest {
         for (Map.Entry<String, byte[]> entry : preserved.entrySet()) write(home.resolve(entry.getKey()), entry.getValue());
         Source source = fixture(work.resolve("good.zip"), members(), NEW_VERSION);
         try (ZipFile archive = new ZipFile(source.archive.toFile())) {
-            check(archive.getEntry(ROOT + "/modules/tuar/TrueOps-TUAR.jar") == null, "New installer accepts a complete release containing only three PROMS tools");
+            check(archive.getEntry(ROOT + "/modules/tuar/TrueOps-TUAR.jar") == null, "New installer accepts a complete release containing four PROMS tools");
             java.util.Enumeration<? extends ZipEntry> entries = archive.entries();
             while (entries.hasMoreElements()) {
                 String name = entries.nextElement().getName().toLowerCase(java.util.Locale.ROOT);
@@ -175,7 +175,7 @@ public final class ToolkitUpdateManagerTest {
         values.put(ROOT + "/modules/tuar/lib/TrueOps-TUAR-compat.jar", jar(NEW_VERSION));
         Source source = fixture(work.resolve("legacy-tuar.zip"), values, NEW_VERSION);
         ToolkitUpdateManager.PendingUpdate pending = ToolkitUpdateManager.checkAndStage(home, "1.0.0", null, source);
-        check(pending != null, "Release with legacy TUAR shortcut is accepted by the three-module contract");
+        check(pending != null, "Release with legacy TUAR shortcut is accepted by the four-module contract");
         ToolkitUpdater.install(pending, home, null);
         for (Map.Entry<String, byte[]> entry : legacyTuarFiles().entrySet()) {
             check(Arrays.equals(entry.getValue(), Files.readAllBytes(home.resolve(entry.getKey()))), "New installer preserves separate TUAR file despite compatibility shortcut: " + entry.getKey());
@@ -282,7 +282,7 @@ public final class ToolkitUpdateManagerTest {
                 "drivers/chromedriver.exe", "modules/tuar/requests.xlsx", "modules/tuar/config/settings.properties", "modules/tuar/attachments/local.txt",
                 "modules/approve/Login.txt", "modules/approve-ref/Login.txt", "modules/approve-ref/Ref_No.csv", "modules/delete/Login.txt",
                 "modules/approve/settings.csv", "modules/approve-ref/settings.csv", "modules/delete/settings.csv",
-                "modules/delete/Ref_No.csv", "modules/approve/lib/user-notes.txt" }) result.put(name, bytes("synthetic existing data: " + name));
+                "modules/delete/Ref_No.csv", "modules/approve/lib/user-notes.txt", "modules/tk07/settings.csv", "modules/tk07/downloads/synthetic.pdf", "config/portal.properties" }) result.put(name, bytes("synthetic existing data: " + name));
         result.putAll(legacyTuarFiles());
         return result;
     }

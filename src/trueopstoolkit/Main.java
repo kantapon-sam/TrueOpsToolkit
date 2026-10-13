@@ -23,6 +23,7 @@ public final class Main extends JFrame {
     private final JButton openLog=new JButton("Latest log");
     private final JButton updateDriver=new JButton("Update ChromeDriver");
     private final JButton sharedAccount=new JButton("Shared account");
+    private final JButton portalSettings=new JButton("Portal settings");
     private final JButton checkUpdate=new JButton("Check for updates");
     private final JLabel updateStatus=Ui.label("",12,Ui.MUTED,false);
     private ToolkitUpdateManager.PendingUpdate pendingUpdate;
@@ -45,15 +46,16 @@ public final class Main extends JFrame {
         super("TrueOps Toolkit v"+AppVersion.current());this.home=home;this.smokeReport=smokeReport;controller=new ProcessController(home);
         this.updates=updates;
         JPanel root=new JPanel(new BorderLayout());root.setBackground(Ui.BG);
-        root.add(Ui.header("TrueOps Toolkit", "v"+AppVersion.current()+"  /  PROMS  /  One account for all three tools"),BorderLayout.NORTH);
+        root.add(Ui.header("TrueOps Toolkit", "v"+AppVersion.current()+"  /  PROMS  /  One account for all four tools"),BorderLayout.NORTH);
         JPanel middle=new JPanel(new BorderLayout(0,17));middle.setOpaque(false);middle.setBorder(new EmptyBorder(22,26,18,26));
         JPanel title=new JPanel(new BorderLayout());title.setOpaque(false);title.add(Ui.label("Choose a tool",18,Ui.TEXT,true),BorderLayout.WEST);
         JPanel titleActions=new JPanel(new FlowLayout(FlowLayout.RIGHT,10,0));titleActions.setOpaque(false);
         titleActions.add(Ui.label("One tool at a time",13,Ui.MUTED,false));
         sharedAccount.addActionListener(e -> SharedCredentialsDialog.showDialog(this,home));titleActions.add(sharedAccount);
+        portalSettings.addActionListener(e -> PortalSettingsDialog.showDialog(this,home));titleActions.add(portalSettings);
         checkUpdate.addActionListener(e -> checkForUpdates());titleActions.add(checkUpdate);
         title.add(titleActions,BorderLayout.EAST);middle.add(title,BorderLayout.NORTH);
-        JPanel grid=new JPanel(new GridLayout(3,1,0,14));grid.setOpaque(false);
+        JPanel grid=new JPanel(new GridLayout(0,1,0,12));grid.setOpaque(false);
         int number=0;
         for(ModuleSpec m:ModuleSpec.values()) {
             JPanel card=new JPanel(new BorderLayout(20,0));card.setBackground(Color.WHITE);
@@ -75,7 +77,7 @@ public final class Main extends JFrame {
         openLog.addActionListener(e -> {if(controller.log()!=null)Ui.open(controller.log(),this);});
         updateDriver.addActionListener(e -> updateDriver());
         stop.addActionListener(e -> stopWork());actions.add(data);actions.add(updateDriver);actions.add(openLog);actions.add(stop);footer.add(actions,BorderLayout.SOUTH);
-        root.add(footer,BorderLayout.SOUTH);setContentPane(root);setSize(930,650);setMinimumSize(new Dimension(820,610));setLocationRelativeTo(null);setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        root.add(footer,BorderLayout.SOUTH);setContentPane(root);setSize(980,760);setMinimumSize(new Dimension(920,710));setLocationRelativeTo(null);setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         refreshTimer=new javax.swing.Timer(600,e -> refresh());refreshTimer.start();refresh();
         addWindowListener(new WindowAdapter(){@Override public void windowClosing(WindowEvent e){requestClose();}});
         if(smokeReport==null){startupChecking=true;checkingUpdate=true;refresh();SwingUtilities.invokeLater(() -> startStartupUpdates());}
@@ -122,7 +124,7 @@ public final class Main extends JFrame {
                 try {
                     startupMessage(false,"Checking Google Chrome and preparing the shared driver...");
                     ensureDriverSafely(message -> startupMessage(false,message));
-                    startupMessage(false,"Shared ChromeDriver is ready for all three tools.");
+                    startupMessage(false,"Shared ChromeDriver is ready for all four tools.");
                 } catch(Exception failure){result.driverFailure=failure;startupMessage(false,"Driver preparation could not finish. You can retry from the launcher.");}
                 return result;
             }
@@ -239,6 +241,7 @@ public final class Main extends JFrame {
         for(JButton b:buttons.values())b.setEnabled(!active && !external && !updatingDriver && !closeAfterUpdate && !startupChecking);
         updateDriver.setEnabled(!active && !external && !updatingDriver && !closeAfterUpdate && !startupChecking);
         sharedAccount.setEnabled(!active && !external && !updatingDriver && !closeAfterUpdate && !startupChecking);
+        portalSettings.setEnabled(!active && !external && !updatingDriver && !closeAfterUpdate && !startupChecking);
         checkUpdate.setEnabled(!checkingUpdate && !closeAfterUpdate && !startupChecking);
         stop.setEnabled(active);openLog.setEnabled(controller.log()!=null);
         if(installingUpdate){status.setText("Preparing installation • Please wait; Toolkit will reopen automatically");return;}
@@ -257,7 +260,7 @@ public final class Main extends JFrame {
             @Override protected Path doInBackground() throws Exception {
                 return ensureDriverSafely(message -> SwingUtilities.invokeLater(() -> status.setText(message)));
             }
-            @Override protected void done(){updatingDriver=false;refresh();try{get();JOptionPane.showMessageDialog(Main.this,"Shared ChromeDriver is ready for all three tools.\nUpdates are checked automatically before Chrome starts.");}catch(Exception ex){Ui.showError(Main.this,ex.getCause()==null?ex:ex.getCause());}}
+            @Override protected void done(){updatingDriver=false;refresh();try{get();JOptionPane.showMessageDialog(Main.this,"Shared ChromeDriver is ready for all four tools.\nUpdates are checked automatically before Chrome starts.");}catch(Exception ex){Ui.showError(Main.this,ex.getCause()==null?ex:ex.getCause());}}
         }.execute();
     }
     private void stopWork(){

@@ -22,7 +22,7 @@ public final class SharedCredentialsMigration {
                 legacy=readDirectoryAccount(directory);
                 if(legacy!=null)break;
             }
-            if(legacy==null && tools!=null)for(String module:new String[]{"approve","approve-ref","delete"}) {
+            if(legacy==null && tools!=null)for(String module:new String[]{"approve","approve-ref","delete","tk07"}) {
                 legacy=readDirectoryAccount(tools.resolve(module).resolve("seed"));if(legacy!=null)break;
             }
             if(legacy==null)return;
@@ -61,8 +61,8 @@ public final class SharedCredentialsMigration {
     }
     private static List<Path> directories(Path home,Path tools) {
         List<Path> directories=new ArrayList<Path>();
-        for(String module:new String[]{"approve","approve-ref","delete"})directories.add(home.resolve("modules").resolve(module));
-        if(tools!=null)for(String module:new String[]{"approve","approve-ref","delete"})directories.add(tools.resolve(module).resolve("seed"));
+        for(ModuleSpec module:ModuleSpec.values())directories.add(module.directory(home));
+        if(tools!=null)for(ModuleSpec module:ModuleSpec.values())directories.add(tools.resolve(module.id).resolve("seed"));
         return directories;
     }
     private static Object[] readDirectoryAccount(Path directory) throws IOException {

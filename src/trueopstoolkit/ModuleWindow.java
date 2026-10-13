@@ -14,17 +14,26 @@ final class ModuleWindow extends JFrame {
     private final Path home;
     private final ModuleSpec module;
     private final ModuleSettings settings;
+    private final WorkServices workServices;
     private final JTextArea status=Ui.note("");
-    private final JTextField username=new JTextField(26),search=new JTextField(26),description=new JTextField(26);
+    private final JTextField username=new JTextField(26),search=new JTextField(26),description=new JTextField(26),approvalDescription=new JTextField(26),rejectionDescription=new JTextField(26);
+    private final JTextField searchSecond=new JTextField(26),searchThird=new JTextField(26),searchFourth=new JTextField(26);
+    private final JSpinner searchDelay=new JSpinner(new SpinnerNumberModel(2000,1000,10000,500));
     private final JButton sharedAccount=new JButton("Shared account settings");
     private final DefaultTableModel tableModel;
     private final JTable table;
     private final JPanel editor=new JPanel(new BorderLayout());
     private final JButton start,check,save,reload;
     private boolean running,dirty,loading,loaded;
+    private boolean monitorWorkProgress;
+    private final javax.swing.Timer progressTimer=new javax.swing.Timer(250,event -> pollWorkProgress());
 
     ModuleWindow(Path home,ModuleSpec module) {
-        super(module.title+" | TrueOps Toolkit v"+AppVersion.current());this.home=home;this.module=module;settings=new ModuleSettings(home,module);
+        this(home,module,new WorkServices());
+    }
+
+    ModuleWindow(Path home,ModuleSpec module,WorkServices workServices) {
+        super(module.title+" | TrueOps Toolkit v"+AppVersion.current());this.home=home;this.module=module;this.workServices=workServices;settings=new ModuleSettings(home,module);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         JPanel root=new JPanel(new BorderLayout());root.setBackground(Ui.BG);
         root.add(Ui.header(module.title,"TrueOps Toolkit v"+AppVersion.current()+" • One shared account for every tool"),BorderLayout.NORTH);
@@ -36,11 +45,18 @@ final class ModuleWindow extends JFrame {
         addRow(form,row++,"Shared account",username);
         sharedAccount.addActionListener(e -> {SharedCredentialsDialog.showDialog(this,home);refreshAccount();});
         addRow(form,row++,"",sharedAccount);
-        if(module==ModuleSpec.APPROVE) {
-            addRow(form,row++,"Search",search);addRow(form,row++,"Description",description);
-            addRow(form,row++,"",Ui.note("Search: separate two conditions with && to require both matches.\nDescription: the note included with each approval."));
+        JButton portal=new JButton("Portal settings (External / Internal)");portal.addActionListener(event->PortalSettingsDialog.showDialog(this,home));addRow(form,row++,"Portal",portal);
+        if(module==ModuleSpec.APPROVE || module==ModuleSpec.TK07) {
+            JTextField[] criteria={search,searchSecond,searchThird,searchFourth};int count=module==ModuleSpec.APPROVE?4:2;
+            JPanel conditions=new JPanel(new GridLayout(count==4?2:1,2,12,8));
+            for(int index=0;index<count;index++){JPanel condition=new JPanel(new BorderLayout(0,4));condition.add(Ui.label("Condition "+(index+1),12,Ui.TEXT,false),BorderLayout.NORTH);condition.add(criteria[index],BorderLayout.CENTER);conditions.add(condition);}
+            addRow(form,row++,"Search (AND)",conditions);
+            if(module==ModuleSpec.TK07){addRow(form,row++,"Approval comment",approvalDescription);addRow(form,row++,"Rejection comment",rejectionDescription);}
+            else addRow(form,row++,"Description",description);
+            addRow(form,row++,"",Ui.note("Fill at least one condition. Every filled condition must match; letter case is ignored.\nTK codes (e.g. TK09) match Request Type only. Enter one term per field."));
         }
-        addRow(form,row++,"",Ui.note("Your shared username and password are encrypted by Windows.\nWhen the tool starts, review the Chrome window and click Sign in."));
+        if(module!=ModuleSpec.DELETE){addRow(form,row++,"Search wait (ms)",searchDelay);addRow(form,row++,"",Ui.note("2000 ms = 2 seconds. The tool also waits for the current result to finish loading."));}
+        addRow(form,row++,"",Ui.note("Your shared username and password are encrypted by Windows.\nSign in is automatic. Complete CAPTCHA if the selected portal requests it."));
         GridBagConstraints spacer=new GridBagConstraints();spacer.gridy=row;spacer.weighty=1;form.add(new JPanel(),spacer);
         tabs.addTab("Login / Settings",new JScrollPane(form));
         String[] columns=module==ModuleSpec.REF?new String[]{"Ref No.","Type","Description"}:new String[]{"Ref No.","Deletion reason"};
@@ -48,7 +64,7 @@ final class ModuleWindow extends JFrame {
         table.putClientProperty("terminateEditOnFocusLost",Boolean.TRUE);
         if(settings.hasReferences()) {
             JPanel references=new JPanel(new BorderLayout(0,8));references.setBorder(new EmptyBorder(10,10,10,10));
-            references.add(Ui.note("Edit cells directly • Changes are saved to this tool's Ref_No.csv.\n"+(module==ModuleSpec.REF?"Ref No. and Type are required in every row. Description is optional.":"Ref No. and a deletion reason are required in every row.")),BorderLayout.NORTH);
+            references.add(Ui.note("Edit cells directly • Changes are saved to this tool's Ref_No.csv.\n"+(module==ModuleSpec.REF?"Ref No. and Type ignore letter case. Both are required; Description is optional.":"Ref No. and a deletion reason are required in every row.")),BorderLayout.NORTH);
             references.add(new JScrollPane(table),BorderLayout.CENTER);
             JPanel rowActions=new JPanel(new FlowLayout(FlowLayout.LEFT,8,0));JButton add=new JButton("Add row"),remove=new JButton("Remove selected rows");
             add.addActionListener(e -> {finishEditing();tableModel.addRow(new String[tableModel.getColumnCount()]);int last=tableModel.getRowCount()-1;table.setRowSelectionInterval(last,last);table.scrollRectToVisible(table.getCellRect(last,0,true));});
@@ -71,11 +87,13 @@ final class ModuleWindow extends JFrame {
         setSize(980,710);setMinimumSize(new Dimension(920,630));setLocationRelativeTo(null);
         DocumentListener changes=new DocumentListener(){public void insertUpdate(DocumentEvent e){changed();}public void removeUpdate(DocumentEvent e){changed();}public void changedUpdate(DocumentEvent e){changed();}};
         search.getDocument().addDocumentListener(changes);description.getDocument().addDocumentListener(changes);
+        searchSecond.getDocument().addDocumentListener(changes);searchThird.getDocument().addDocumentListener(changes);searchFourth.getDocument().addDocumentListener(changes);searchDelay.addChangeListener(event->changed());
+        approvalDescription.getDocument().addDocumentListener(changes);rejectionDescription.getDocument().addDocumentListener(changes);
         tableModel.addTableModelListener(e -> changed());loadSettings();
         addWindowListener(new WindowAdapter(){@Override public void windowClosing(WindowEvent e){
             if(running && JOptionPane.showConfirmDialog(ModuleWindow.this,"A task is running. Stop it and close this window?","Stop tool",JOptionPane.YES_NO_OPTION)!=JOptionPane.YES_OPTION)return;
             if(!running && !discardEdits())return;
-            dispose();System.exit(0);
+            progressTimer.stop();dispose();System.exit(0);
         }});
     }
 
@@ -89,7 +107,7 @@ final class ModuleWindow extends JFrame {
     private void loadSettings() {
         loading=true;
         try {
-            settings.load();refreshAccount();search.setText(settings.search);description.setText(settings.description);
+            settings.load();refreshAccount();String[] terms=settings.search.split("&&",module==ModuleSpec.TK07?2:4);JTextField[] criteria={search,searchSecond,searchThird,searchFourth};for(int index=0;index<criteria.length;index++)criteria[index].setText(index<terms.length?terms[index].trim():"");searchDelay.setValue(settings.searchDelayMs);description.setText(settings.description);approvalDescription.setText(settings.approvalDescription);rejectionDescription.setText(settings.rejectionDescription);
             tableModel.setRowCount(0);for(String[] row:settings.rows)tableModel.addRow(row);
             loaded=true;clean();status.setText("Ready to edit • Save settings to keep your changes.\nStart saves the current settings and runs "+module.title+".");
         } catch(Exception ex) {loaded=false;status.setText("Could not load settings: "+ex.getMessage()+"\nCheck the files in the data folder, then click Reload saved settings.");}
@@ -98,7 +116,9 @@ final class ModuleWindow extends JFrame {
     private void finishEditing(){if(table.isEditing())table.getCellEditor().stopCellEditing();}
     private void collect() throws IOException {
         finishEditing();
-        settings.search=search.getText().trim();settings.description=description.getText();settings.rows.clear();
+        if(module==ModuleSpec.APPROVE || module==ModuleSpec.TK07){java.util.List<String> terms=new java.util.ArrayList<>();JTextField[] criteria={search,searchSecond,searchThird,searchFourth};int count=module==ModuleSpec.APPROVE?4:2;for(int index=0;index<count;index++){String term=criteria[index].getText().trim();if(term.contains("&&"))throw new IOException("Enter each search condition in a separate field.");if(!term.isEmpty())terms.add(term);}settings.search=String.join("&&",terms);}
+        try{searchDelay.commitEdit();}catch(java.text.ParseException invalid){throw new IOException("Enter a valid Search wait between 1000 and 10000 milliseconds.");}
+        settings.searchDelayMs=((Number)searchDelay.getValue()).intValue();settings.description=description.getText();settings.approvalDescription=approvalDescription.getText();settings.rejectionDescription=rejectionDescription.getText();settings.rows.clear();
         for(int r=0;r<tableModel.getRowCount();r++) {
             String[] row=new String[tableModel.getColumnCount()];
             for(int c=0;c<row.length;c++){Object cell=tableModel.getValueAt(r,c);row[c]=cell==null?"":cell.toString();if(c<row.length-1)row[c]=row[c].trim();}
@@ -121,6 +141,12 @@ final class ModuleWindow extends JFrame {
     }
     private static void enableTree(Component component,boolean enabled){component.setEnabled(enabled);if(component instanceof Container)for(Component child:((Container)component).getComponents())enableTree(child,enabled);}
     private void updateStatus(String message){SwingUtilities.invokeLater(() -> status.setText(message));}
+    private void pollWorkProgress() {
+        if(!monitorWorkProgress || !running)return;
+        String progress=System.getProperty("trueops."+module.id+".progress","");
+        if(!progress.isEmpty())status.setText(progress);
+    }
+    private String runSummary() {return System.getProperty("trueops."+module.id+".summary","");}
     private void checkBrowser() {
         busy(true);status.setText("Checking for shared ChromeDriver updates...");
         new SwingWorker<String,Void>(){
@@ -134,21 +160,43 @@ final class ModuleWindow extends JFrame {
     }
     private void startWork() {
         try{collect();settings.validate(true);}catch(Exception ex){Ui.showError(this,ex);return;}
-        try {java.util.Optional<SharedCredentials.Credentials> saved=SharedCredentials.load(home);
-            if(!saved.isPresent())throw new IOException("Set up your shared account before starting.");
-            saved.get().close();
-        } catch(IOException ex){Ui.showError(this,ex);return;}
+        try {workServices.verifyAccount(home);}catch(IOException ex){Ui.showError(this,ex);return;}
         if(module==ModuleSpec.DELETE && JOptionPane.showConfirmDialog(this,"Delete the "+settings.rows.size()+" sites listed in this table?\nReview every reference and deletion reason before confirming.","Start Delete Site",JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE)!=JOptionPane.OK_OPTION)return;
         if(!saveSettings(true))return;
+        for(String suffix:new String[]{"progress","summary","result"})System.clearProperty("trueops."+module.id+"."+suffix);
+        monitorWorkProgress=true;progressTimer.start();
         busy(true);status.setText("Checking shared ChromeDriver before starting...");
         new SwingWorker<Void,Void>(){
             @Override protected Void doInBackground() throws Exception {
-                Path driver=SharedChromeDriver.ensure(home,ModuleWindow.this::updateStatus);
+                Path driver=workServices.ensureDriver(home,ModuleWindow.this::updateStatus);
                 System.setProperty("webdriver.chrome.driver",driver.toString());
-                updateStatus("Running • Sign in through the Chrome window.\nClick Latest log in the launcher for more details.");
-                ModuleBootstrap.invoke(module);return null;
+                updateStatus("Running • Signing in through the Chrome window.\nClick Latest log in the launcher for more details.");
+                workServices.run(module);return null;
             }
-            @Override protected void done(){busy(false);try{get();status.setText("Process finished. Check the results in PROMS and the log.\nYou can edit the settings before the next run.");}catch(Exception ex){status.setText("The tool stopped with an error: "+ex.getCause()+"\nSee this tool's log for details.");}}
+            @Override protected void done(){
+                monitorWorkProgress=false;progressTimer.stop();busy(false);
+                String summary=runSummary();
+                try {
+                    get();
+                    status.setText((summary.isEmpty()?"Process ended. Check PROMS and the log to verify the results.":summary)+"\nYou can edit the settings before the next run.");
+                }catch(Exception ex){
+                    Throwable cause=ex.getCause()==null?ex:ex.getCause();
+                    status.setText((summary.isEmpty()?"":summary+"\n")+"The tool stopped with an error: "+cause.getMessage()+"\nCheck PROMS and this tool's log before retrying.");
+                }
+            }
         }.execute();
+    }
+
+    /** Allows lifecycle tests to exercise the real worker and timer without credentials, networking or portal actions. */
+    static class WorkServices {
+        void verifyAccount(Path home) throws IOException {
+            java.util.Optional<SharedCredentials.Credentials> saved=SharedCredentials.load(home);
+            if(!saved.isPresent())throw new IOException("Set up your shared account before starting.");
+            saved.get().close();
+        }
+        Path ensureDriver(Path home,java.util.function.Consumer<String> progress) throws Exception {
+            return SharedChromeDriver.ensure(home,progress);
+        }
+        void run(ModuleSpec module) throws Exception {ModuleBootstrap.invoke(module);}
     }
 }

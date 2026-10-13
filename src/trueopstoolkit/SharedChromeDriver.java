@@ -167,7 +167,7 @@ public final class SharedChromeDriver {
     private static void migrateLegacy(Path home, Path target, String chrome, Consumer<String> log,
             VersionReader reader) throws IOException {
         String[] locations = { "modules/approve/chromedriver.exe",
-            "modules/approve-ref/chromedriver.exe", "modules/delete/chromedriver.exe" };
+            "modules/approve-ref/chromedriver.exe", "modules/delete/chromedriver.exe", "modules/tk07/chromedriver.exe" };
         Path best = null;
         String bestVersion = null;
         for (String location : locations) {

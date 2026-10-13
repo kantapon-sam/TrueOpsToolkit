@@ -68,15 +68,17 @@ function Write-Manifest([string]$Path, [string]$MainClass, [string[]]$Libraries,
     [System.IO.File]::WriteAllText($Path, ($physical -join "`r`n") + "`r`n", [System.Text.Encoding]::ASCII)
 }
 
-function Compile-Java([string]$Source, [string]$Classes, [string]$LibraryFolder) {
+function Compile-Java([string]$Source, [string]$Classes, [string]$LibraryFolder, [string]$CommonSource = '') {
     Remove-BuildFolder $Classes
     Ensure-Folder $Classes
-    $sources = @(Get-ChildItem -LiteralPath $Source -Filter '*.java' -File -Recurse | Sort-Object FullName)
+    $sourceRoots = @($Source)
+    if ($CommonSource) { $sourceRoots += $CommonSource }
+    $sources = @($sourceRoots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Filter '*.java' -File -Recurse } | Sort-Object FullName -Unique)
     if ($sources.Count -eq 0) { throw "No Java sources found in $Source" }
     $argFile = Join-Path $Classes 'sources.args'
     $sourceArgs = @($sources | ForEach-Object { '"' + $_.FullName.Replace('\', '/') + '"' })
     [System.IO.File]::WriteAllLines($argFile, $sourceArgs, [System.Text.Encoding]::Default)
-    $compileArgs = @('-encoding', 'UTF-8', '-sourcepath', $Source, '-d', $Classes)
+    $compileArgs = @('-encoding', 'UTF-8', '-sourcepath', ($sourceRoots -join [System.IO.Path]::PathSeparator), '-d', $Classes)
     if ($script:javacMajor -ge 9) {
         $compileArgs += @('--release', '8')
     } else {
@@ -129,7 +131,8 @@ Ensure-Folder $distRoot
 $modules = @(
     @{ Id = 'approve'; Jar = 'TrueOps-Approve.jar'; Legacy = 'ApproveProms_TrueCorp_V3.jar'; Main = 'trueopstoolkit.ModuleShortcuts$Approve' },
     @{ Id = 'approve-ref'; Jar = 'TrueOps-ApproveByRef.jar'; Legacy = 'ApproveProms_Ref.jar'; Main = 'trueopstoolkit.ModuleShortcuts$Ref' },
-    @{ Id = 'delete'; Jar = 'TrueOps-DeleteSite.jar'; Legacy = 'Delete_Site_TrueCorp.jar'; Main = 'trueopstoolkit.ModuleShortcuts$Delete' }
+    @{ Id = 'delete'; Jar = 'TrueOps-DeleteSite.jar'; Legacy = 'Delete_Site_TrueCorp.jar'; Main = 'trueopstoolkit.ModuleShortcuts$Delete' },
+    @{ Id = 'tk07'; Jar = 'TrueOps-TK07.jar'; Legacy = 'TK07_V3_TrueCorp.jar'; Main = 'trueopstoolkit.ModuleShortcuts$Tk07' }
 )
 
 foreach ($module in $modules) {
@@ -137,7 +140,8 @@ foreach ($module in $modules) {
     $toolRoot = Join-Path $projectRoot ('tools\' + $module.Id)
     $classes = Join-Path $buildRoot ('modules\' + $module.Id)
     $destination = Join-Path $distRoot ('modules\' + $module.Id)
-    Compile-Java (Join-Path $toolRoot 'src') $classes (Join-Path $toolRoot 'lib')
+    $commonSource = Join-Path $projectRoot 'tools\common\src'
+    Compile-Java (Join-Path $toolRoot 'src') $classes (Join-Path $toolRoot 'lib') $commonSource
     Ensure-Folder $destination
     Copy-Tree (Join-Path $toolRoot 'lib') (Join-Path $destination 'lib')
     # Runtime data is private. Never restore old plaintext accounts or personal

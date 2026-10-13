@@ -1,16 +1,20 @@
 TrueOps Toolkit module sources
 =============================
 
-Version 1.0.2 includes an English launcher and English interfaces for three PROMS tools.
+Version 1.1.0 includes an English launcher and English interfaces for four PROMS tools.
 
 approve     Approve PROMS      TrueOps-Approve.jar
 approve-ref Approve by Ref     TrueOps-ApproveByRef.jar
 delete      Delete Site        TrueOps-DeleteSite.jar
+tk07        TK07 Review        TrueOps-TK07.jar
 
-src/ and lib/ are local copies from the original NetBeans projects.
-The originals are not modified by either build method.
+src/ contains adapted module sources; lib/ contains selected dependencies
+from the original NetBeans projects. Original standalone folders are not
+modified by either build method.
 Each module is compiled into its own JAR and keeps its own libraries.
 The launcher starts each tool with that module's working directory.
+tools/common/src contains approval-page synchronization and confirmation
+checks and shared portal/sign-in helpers compiled into module JARs by either build method.
 
 seed/ contains private legacy runtime files and is ignored by Git.
 Neither build method copies seed data into dist or release packages.
@@ -36,13 +40,51 @@ The installer already distributed with 1.0.1 still needs a manual reopen
 after its first upgrade. Its next updates use the new installer.
 The 1.0.0 update validator requires the retired TUAR files; those installations
 need one manual application-file upgrade while retaining their personal data.
-Changes made in the three PROMS runtime module folders are retained across builds.
+Changes made in the four PROMS runtime module folders are retained across builds.
 Use the shared account dialog for every login. Username and password are
 protected together with Windows DPAPI and are never saved in settings.csv.
-Legacy Login.txt Search/Description preferences migrate automatically on first use.
+Legacy Login.txt preferences inside Toolkit module folders migrate or remain
+as a preferences backup; existing current settings remain authoritative.
 Change task settings and PROMS reference lists through the module window.
+Approve PROMS provides four separate AND condition fields and requires at
+least one filled field; TK07 Review provides two. Every filled field must
+match, and blank fields are ignored. Existing Search values separated by
+&& remain compatible. Matching ignores letter case. Standalone TK codes
+match complete Request Type category tokens before the site suffix, never
+similar codes or text in project, requester, or site fields.
+Approve PROMS, Approve by Ref, and TK07 Review have SearchDelayMs from
+1000 to 10000, defaulting to 2000. Actual loading and response checks remain
+required. Verified native Angular filtered data avoids visiting every page
+to collect candidates; unsupported layouts retain checked pagination.
+Each approval still rechecks and selects its exact pending reference.
+Approve by Ref matches complete references and request-category tokens
+without regard to case. The Type input is a category such as TK09, separate
+from the FBOQ C-Part Type check. FBOQ must contain at least one row and every
+C-Part Type must be Services. Each input row retains its own Description,
+and each reference starts from the pending list. A C-Part table with
+additional pages stops the run before approval; unpaginated and single-page
+tables are supported.
+Both approval tools count success only after PROMS confirms the submission
+and a fresh search no longer lists the exact reference as pending. Progress
+reports scanned, matched, approved, skipped, and failed counts, with explicit
+no-match and partial-failure results. Unconfirmed submissions are not retried
+automatically; review the reference in PROMS before retrying.
 Saved values are kept in dist/modules/<id> (or the selected data path), not seed/.
 The shared encrypted account is kept in dist/config/credentials.dat.
+Portal settings select External or Internal for all four tools. The mode is
+stored in dist/config/portal.properties and loaded again before each run.
+External uses https://proms.truecorp.co.th/proms/login/.
+Internal uses http://promsweb.true.th/proms/login over the company network/VPN.
+The tool fills the shared account and submits Sign in once automatically.
+Complete CAPTCHA in Chrome when required. Failed sign-ins are not retried.
+TK07 Review has Search, Description_Approve and Description_Reject settings.
+It preserves the canonical project/site rules, verifies the exact request's
+fresh attachment response and list, then reviews its RFS PDF. Multiple or
+non-PDF RFS files, unreadable/image-only PDFs, and unverified loading skip
+without a decision. Unconfirmed downloads stop before the next request.
+Downloads are isolated by run; original PDFs and standalone data remain
+untouched. PDF contents are excluded from task logs. Approved and rejected
+counts require confirmation and a fresh pending-list check.
 Opening a module JAR routes through the Toolkit and its shared account.
 All application versions come from the root version.properties file.
 
@@ -55,3 +97,8 @@ or open this folder in NetBeans and select Build / Run Project (F6).
 Build requires a JDK; running the packaged dist folder requires Java 8 or later.
 Keep the complete dist folder together.
 Use the generated release ZIP when distributing the application to other users.
+Local Selenium/PDF fixtures use synthetic pending pages and results.
+Actual Internal portal checks through VPN were read-only: 45 case-independent
+Search matches, one exact reference with four Services-only FBOQ rows,
+and no pending TK07 matches. No real requests were approved, rejected,
+or deleted during testing.

@@ -60,6 +60,8 @@ public final class ModuleBootstrap {
         watcher.schedule(new java.util.TimerTask(){@Override public void run(){if(Files.isRegularFile(stop))System.exit(0);}},250,250);
     }
     static void invoke(ModuleSpec module) throws Exception {
+        PortalSettings.apply(ToolkitPaths.home());
+        ModuleSettings current=new ModuleSettings(ToolkitPaths.home(),module);current.load();current.validate(false);System.setProperty("trueops.search.delay.ms",Integer.toString(current.searchDelayMs));
         try {Class.forName(module.mainClass).getMethod("main",String[].class).invoke(null,(Object)new String[0]);}
         catch(InvocationTargetException ex){Throwable cause=ex.getCause();if(cause instanceof Exception)throw (Exception)cause;throw new RuntimeException(cause);}
     }

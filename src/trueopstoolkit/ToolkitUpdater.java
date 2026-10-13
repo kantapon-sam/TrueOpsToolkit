@@ -36,9 +36,9 @@ import java.util.zip.ZipFile;
 public final class ToolkitUpdater {
     // TUAR is maintained separately. Its previous executable, libraries, and user data
     // stay outside this installer's ownership, including during rollback.
-    private static final String[] MODULES = { "approve", "approve-ref", "delete" };
+    private static final String[] MODULES = { "approve", "approve-ref", "delete", "tk07" };
     private static final String[] MODULE_JARS = { "TrueOps-Approve.jar",
-        "TrueOps-ApproveByRef.jar", "TrueOps-DeleteSite.jar" };
+        "TrueOps-ApproveByRef.jar", "TrueOps-DeleteSite.jar", "TrueOps-TK07.jar" };
     private static final Set<String> ROOT_FILES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
             "TrueOpsToolkit.jar", "version.properties", "README.md", "CHANGELOG.md", "RELEASE.md")));
     private static final int ENTRY_LIMIT = 4096;

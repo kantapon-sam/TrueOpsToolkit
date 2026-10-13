@@ -15,7 +15,7 @@ final class SettingsFiles {
     private SettingsFiles() { }
 
     static void migrate(Path home) throws IOException {
-        for(String id:new String[]{"approve","approve-ref","delete"})resolve(home.resolve("modules").resolve(id));
+        for(ModuleSpec module:ModuleSpec.values())resolve(module.directory(home));
     }
 
     static synchronized Path resolve(Path directory) throws IOException {
@@ -60,7 +60,7 @@ final class SettingsFiles {
         for(String raw:text(bytes).split("\\r?\\n",-1)) {
             String line=raw.trim();if(line.isEmpty())continue;
             String[] pair=line.split(",",2);
-            if(pair.length==2 && ("Search".equalsIgnoreCase(pair[0].trim()) || "Description".equalsIgnoreCase(pair[0].trim())) && pair[1].trim().isEmpty())continue;
+            if(pair.length==2){String key=pair[0].trim(),value=pair[1].trim();if(("Search".equalsIgnoreCase(key) || "Description".equalsIgnoreCase(key) || "Description_Approve".equalsIgnoreCase(key) || "Description_Reject".equalsIgnoreCase(key)) && value.isEmpty())continue;if("SearchDelayMs".equalsIgnoreCase(key) && "2000".equals(value))continue;}
             return true;
         }
         return false;

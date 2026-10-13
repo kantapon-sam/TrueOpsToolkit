@@ -52,21 +52,13 @@ public class Delete_Site_TrueCorp {
                 }
             }, 0, 5000); // beep ทุกๆ 5 วินาที
 
-            driver.get("https://proms.truecorp.co.th/proms/login/");
-            driver.manage().window().maximize();
-
-            WebElement username = driver.findElement(By.id("username"));
-            WebElement password = driver.findElement(By.id("password"));
-            username.sendKeys(settings.get("User"));
-            password.sendKeys(settings.get("Password"));
-            WebElement signInButton = driver.findElement(By.id("btn_signin"));
-            new WebDriverWait(driver, 120).until(ExpectedConditions.stalenessOf(signInButton));
-            System.out.println("The user submitted the sign-in form.");
+            PromsSignIn.signIn(driver, PortalUrls.login(), settings.get("User"),
+                    settings.get("Password"), 300, message -> System.out.println(message));
             Thread.sleep(500);
 
             for (String[] reference : references) {
                 WebDriverWait wait = new WebDriverWait(driver, 500);
-                driver.get("https://proms.truecorp.co.th/proms/workorder");
+                driver.get(PortalUrls.workOrder());
                 Thread.sleep(1000);
                 wait.until(ExpectedConditions.invisibilityOfElementLocated(By.className("swal2-image")));
 

@@ -14,7 +14,10 @@
         <sequential>
             <mkdir dir="${build.dir}/modules/@{id}"/>
             <mkdir dir="${dist.dir}/modules/@{id}/lib"/>
-            <javac srcdir="tools/@{id}/src" sourcepath="tools/@{id}/src"
+            <condition property="module.@{id}.shared.sources" value="tools/common/src" else="tools/@{id}/src">
+                <or><equals arg1="@{id}" arg2="approve"/><equals arg1="@{id}" arg2="approve-ref"/><equals arg1="@{id}" arg2="tk07"/><equals arg1="@{id}" arg2="delete"/></or>
+            </condition>
+            <javac srcdir="tools/@{id}/src;${module.@{id}.shared.sources}" sourcepath="tools/@{id}/src;${module.@{id}.shared.sources}"
                    destdir="${build.dir}/modules/@{id}" source="1.8" target="1.8"
                    encoding="UTF-8" includeantruntime="false">
                 <classpath><fileset dir="tools/@{id}/lib" includes="*.jar" excludes="*-sources.jar"/></classpath>
@@ -46,10 +49,11 @@
             <condition><not><matches string="${app.version}" pattern="^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$"/></not></condition>
         </fail>
     </target>
-    <target name="modules" depends="validate-version" description="Build the three PROMS tools; preserve runtime data.">
+    <target name="modules" depends="validate-version" description="Build the four PROMS tools; preserve runtime data.">
         <build-module id="approve" jar="TrueOps-Approve.jar" legacy="ApproveProms_TrueCorp_V3.jar" main="trueopstoolkit.ModuleShortcuts$Approve"/>
         <build-module id="approve-ref" jar="TrueOps-ApproveByRef.jar" legacy="ApproveProms_Ref.jar" main="trueopstoolkit.ModuleShortcuts$Ref"/>
         <build-module id="delete" jar="TrueOps-DeleteSite.jar" legacy="Delete_Site_TrueCorp.jar" main="trueopstoolkit.ModuleShortcuts$Delete"/>
+        <build-module id="tk07" jar="TrueOps-TK07.jar" legacy="TK07_V3_TrueCorp.jar" main="trueopstoolkit.ModuleShortcuts$Tk07"/>
     </target>
     <target name="compile" depends="validate-version" description="Compile the desktop launcher.">
         <!-- Recreate launcher classes so removed shortcuts cannot survive an incremental build. -->

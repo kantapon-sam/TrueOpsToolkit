@@ -124,7 +124,8 @@ $script:allowed = New-Object 'System.Collections.Generic.List[string]'
 $modules = @(
     @{Id='approve'; Jar='TrueOps-Approve.jar'; Main='trueopstoolkit.ModuleShortcuts$Approve'},
     @{Id='approve-ref'; Jar='TrueOps-ApproveByRef.jar'; Main='trueopstoolkit.ModuleShortcuts$Ref'},
-    @{Id='delete'; Jar='TrueOps-DeleteSite.jar'; Main='trueopstoolkit.ModuleShortcuts$Delete'}
+    @{Id='delete'; Jar='TrueOps-DeleteSite.jar'; Main='trueopstoolkit.ModuleShortcuts$Delete'},
+    @{Id='tk07'; Jar='TrueOps-TK07.jar'; Main='trueopstoolkit.ModuleShortcuts$Tk07'}
 )
 Check-AppJar (Join-Path $dist 'TrueOpsToolkit.jar') 'trueopstoolkit.Main'
 Stage-File (Join-Path $dist 'TrueOpsToolkit.jar') 'TrueOpsToolkit.jar'
@@ -143,7 +144,8 @@ foreach ($module in $modules) {
     }
     $directory = Join-Path $script:stageRoot ('modules\' + $module.Id)
     # Fresh non-secret preferences only. Account fields are never written here.
-    Write-Utf8 (Join-Path $directory 'settings.csv') "Search,`r`nDescription,`r`n"
+    $blankPreferences = if ($module.Id -eq 'tk07') { "Search,TK07`r`nDescription_Approve,`r`nDescription_Reject,`r`nSearchDelayMs,2000`r`n" } elseif ($module.Id -eq 'delete') { "Search,`r`nDescription,`r`n" } else { "Search,`r`nDescription,`r`nSearchDelayMs,2000`r`n" }
+    Write-Utf8 (Join-Path $directory 'settings.csv') $blankPreferences
     $script:allowed.Add('modules/' + $module.Id + '/settings.csv')
     if ($module.Id -in @('approve-ref', 'delete')) {
         Write-Utf8 (Join-Path $directory 'Ref_No.csv') ''
@@ -169,5 +171,5 @@ Write-Utf8 (Join-Path $releaseRoot 'update.properties') ("app.version=$version`r
 Write-Host "Release ready: $zipPath"
 Write-Host "SHA256: $hash"
 Write-Host 'Update feed: releases\update.properties (attach it to the same GitHub release).'
-Write-Host 'Contains three PROMS tools and blank preferences/reference lists. No TUAR folder, account, runtime settings, logs, or existing driver was copied.'
+Write-Host 'Contains four PROMS tools and fresh preferences/reference lists. No TUAR folder, account, runtime settings, logs, or existing driver was copied.'
 Write-Host 'Verified every archive layer: no EXE, BAT, CMD, or standalone ChromeDriver binary.'
