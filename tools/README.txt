@@ -1,7 +1,7 @@
 TrueOps Toolkit module sources
 =============================
 
-Version 1.0.1 includes an English launcher and English interfaces for three PROMS tools.
+Version 1.0.2 includes an English launcher and English interfaces for three PROMS tools.
 
 approve     Approve PROMS      TrueOps-Approve.jar
 approve-ref Approve by Ref     TrueOps-ApproveByRef.jar
@@ -16,9 +16,10 @@ seed/ contains private legacy runtime files and is ignored by Git.
 Neither build method copies seed data into dist or release packages.
 release.ps1 generates new blank reference lists and settings.csv preferences.
 Request TUAR is maintained as a separate application and is not a Toolkit task.
-Release packages exclude its implementation, dependencies, and workbook.
-A small legacy TrueOps-TUAR.jar shortcut and compatibility marker remain for
-automatic updates from 1.0.0. The shortcut opens the three-tool Toolkit.
+Current source and release packages exclude its folder, shortcut,
+compatibility marker, implementation, dependencies, and workbook.
+Existing modules/tuar runtime contents are archived outside the Toolkit under
+%LOCALAPPDATA%\TrueOpsToolkit\backups before that retired folder is removed.
 Every Toolkit module uses
 dist/drivers/chromedriver.exe, automatically prepared during Toolkit startup
 and checked again before browser startup. No driver binary, .exe, .bat, or
@@ -27,7 +28,15 @@ Startup shows a progress dialog and checks application and driver updates
 without a manual check. A new application release offers Update now or Later.
 The manager migrates a compatible legacy driver if available and checks the
 official Google release endpoint for a newer compatible version.
-Changes made in dist/modules/* are retained across builds.
+After the Toolkit closes for an application update, a visible installer
+shows its progress while waiting for application files, verifying the
+update, installing it, or restoring previous files after an installation
+failure. Successful installation automatically reopens the updated Toolkit.
+The installer already distributed with 1.0.1 still needs a manual reopen
+after its first upgrade. Its next updates use the new installer.
+The 1.0.0 update validator requires the retired TUAR files; those installations
+need one manual application-file upgrade while retaining their personal data.
+Changes made in the three PROMS runtime module folders are retained across builds.
 Use the shared account dialog for every login. Username and password are
 protected together with Windows DPAPI and are never saved in settings.csv.
 Legacy Login.txt Search/Description preferences migrate automatically on first use.

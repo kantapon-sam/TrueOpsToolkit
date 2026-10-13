@@ -92,9 +92,6 @@ foreach ($module in $modules) {
     $expected.Add('modules/' + $module.Id + '/settings.csv')
     if ($module.Id -in @('approve-ref', 'delete')) { $expected.Add('modules/' + $module.Id + '/Ref_No.csv') }
 }
-$bridges = @('modules/tuar/TrueOps-TUAR.jar', 'modules/tuar/lib/TrueOps-TUAR-compat.jar')
-foreach ($path in $bridges) { $expected.Add($path) }
-
 function Read-Entry([System.IO.Compression.ZipArchive]$Archive, [string]$Name) {
     $entry = $Archive.GetEntry($Name)
     if (-not $entry) { throw "Missing archive entry: $Name" }
@@ -113,28 +110,13 @@ function Test-NestedJar([System.IO.Compression.ZipArchive]$Archive, [string]$Nam
     } finally { $jar.Dispose(); $stream.Dispose() }
 }
 
-function Test-CompatibilityBridge([System.IO.Compression.ZipArchive]$Archive, [string]$Name) {
-    $stream = $Archive.GetEntry($prefix + $Name).Open()
-    $jar = [System.IO.Compression.ZipArchive]::new($stream, [System.IO.Compression.ZipArchiveMode]::Read)
-    try {
-        if ($jar.Entries.Count -ne 1 -or $jar.Entries[0].FullName -cne 'META-INF/MANIFEST.MF') {
-            throw 'The TUAR compatibility bridge must contain only a manifest, with no TUAR classes or dependencies.'
-        }
-        $manifest = Read-Entry $jar 'META-INF/MANIFEST.MF'
-        if ($Name -eq 'modules/tuar/TrueOps-TUAR.jar') {
-            if ($manifest -notmatch '(?m)^Main-Class: trueopstoolkit\.ModuleShortcuts\$Tuar\r?$' -or $manifest -notmatch '(?m)^Class-Path: ../../TrueOpsToolkit\.jar\r?$') {
-                throw 'Legacy TUAR shortcut must route through the central launcher.'
-            }
-        }
-    } finally { $jar.Dispose(); $stream.Dispose() }
-}
-
 $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
 try {
     $files = @($archive.Entries | Where-Object { -not $_.FullName.EndsWith('/') })
     foreach ($file in $files) {
         if (-not $file.FullName.StartsWith($prefix, [StringComparison]::Ordinal)) { throw 'Unexpected archive root.' }
     }
+    if (@($archive.Entries | Where-Object { $_.FullName -match '(?i)(^|/)tuar(/|$)' }).Count -ne 0) { throw 'Retired TUAR directories must not appear in the release.' }
     $actual = @($files | ForEach-Object { $_.FullName.Substring($prefix.Length) } | Sort-Object)
     if (@(Compare-Object @($expected | Sort-Object) $actual).Count -ne 0) { throw 'Archive differs from the release allowlist.' }
     if ((Read-Entry $archive ($prefix + 'version.properties')) -cne $sourceText) { throw 'Packaged version source mismatch.' }
@@ -146,10 +128,6 @@ try {
         if ($module.Id -in @('approve-ref', 'delete')) {
             if ($archive.GetEntry($prefix + 'modules/' + $module.Id + '/Ref_No.csv').Length -ne 0) { throw 'Release reference list is not empty.' }
         }
-    }
-    foreach ($path in $bridges) {
-        Test-NestedJar $archive $path
-        Test-CompatibilityBridge $archive $path
     }
 } finally { $archive.Dispose() }
 function Find-ReleaseJavaTool([string]$Name) {
@@ -168,4 +146,4 @@ $launcher = Join-Path $root 'dist\TrueOpsToolkit.jar'
 if ($LASTEXITCODE -ne 0) { throw 'Release updater compatibility test compilation failed.' }
 & $java '-cp' ($testClasses + ';' + $launcher) 'trueopstoolkit.ToolkitUpdateManagerTest' '--verify-release' $zipPath (Join-Path $root 'releases\update.properties')
 if ($LASTEXITCODE -ne 0) { throw 'Packaged release is not compatible with the application updater.' }
-Write-Host "PASS: $zipName checksum, update descriptor, four application versions, two manifest-only compatibility bridges, exact file allowlist, blank preferences/reference inputs, and no TUAR implementation/workbook/executable/batch/driver files."
+Write-Host "PASS: $zipName checksum, update descriptor, four application versions, exact three-module file allowlist, blank preferences/reference inputs, and no TUAR folder/executable/batch/driver files."

@@ -52,6 +52,8 @@
         <build-module id="delete" jar="TrueOps-DeleteSite.jar" legacy="Delete_Site_TrueCorp.jar" main="trueopstoolkit.ModuleShortcuts$Delete"/>
     </target>
     <target name="compile" depends="validate-version" description="Compile the desktop launcher.">
+        <!-- Recreate launcher classes so removed shortcuts cannot survive an incremental build. -->
+        <delete dir="${build.dir}/classes"/>
         <mkdir dir="${build.dir}/classes"/>
         <javac srcdir="src" sourcepath="src" destdir="${build.dir}/classes"
                source="1.8" target="1.8" encoding="UTF-8" includeantruntime="false"/>

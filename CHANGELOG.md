@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2 — 2026-10-13
+
+- Show a visible installation progress dialog after the Toolkit closes, including waiting for application files, update verification, installation, and rollback if needed.
+- Automatically reopen the updated Toolkit after a successful installation.
+- Remove the retired TUAR folder, shortcut, and compatibility marker from current source and release packages.
+- Archive legacy TUAR runtime data outside the Toolkit under the Windows user's local application data before removing the retired folder.
+- Keep the three PROMS tools, `settings.csv` preferences, shared encrypted account, and automatic application and ChromeDriver checks.
+- Installations of 1.0.1 use their existing installer for the first upgrade and need one manual reopen. Installations of 1.0.0 need one manual application-file upgrade because their update validator requires the retired TUAR files.
+
 ## 1.0.1 — 2026-10-13
 
 - Remove Request TUAR from the launcher because it is maintained as a separate application.

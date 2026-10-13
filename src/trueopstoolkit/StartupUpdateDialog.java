@@ -47,9 +47,9 @@ final class StartupUpdateDialog extends JDialog {
         JDialog dialog=new JDialog(owner,"TrueOps Toolkit update available",Dialog.ModalityType.APPLICATION_MODAL);
         JPanel body=new JPanel(new BorderLayout(0,16));body.setBorder(new EmptyBorder(20,24,20,24));
         body.add(Ui.label("Version "+version+" is ready",21,Ui.TEXT,true),BorderLayout.NORTH);
-        JTextArea message=Ui.note("Update now closes Toolkit and installs the downloaded version.\n"
-                +"Open TrueOpsToolkit.jar again after installation to use the new version.\n\n"
-                +"Later keeps this session open and installs the update when you close Toolkit.\n"
+        JTextArea message=Ui.note("Update now closes Toolkit and shows installation progress.\n"
+                +"Toolkit will reopen automatically when the update finishes.\n\n"
+                +"Later keeps this session open. Closing Toolkit installs the update, then reopens it.\n"
                 +"Your account, settings, and work files will be kept."
                 +(canInstallNow?"":"\n\nClose the active tool before choosing Update now."));
         message.setRows(canInstallNow?6:8);body.add(message,BorderLayout.CENTER);

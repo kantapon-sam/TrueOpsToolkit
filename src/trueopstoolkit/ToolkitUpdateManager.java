@@ -31,6 +31,8 @@ public final class ToolkitUpdateManager {
     public static final String FEED = REPOSITORY + "/releases/latest/download/update.properties";
     static final long ARCHIVE_LIMIT = 512L * 1024 * 1024;
     private static final long MANIFEST_LIMIT = 16 * 1024;
+    static final String REOPEN_TOKEN_PROPERTY = "trueops.update.restart.token";
+    static final String REOPEN_ACK = ".updates/reopened.properties";
 
     private ToolkitUpdateManager() { }
 
@@ -146,12 +148,7 @@ public final class ToolkitUpdateManager {
         if (isInstallPending(normalizedHome)) throw new IOException("Another toolkit update is already being installed.");
         validateStaging(normalizedHome, pending.directory);
         verifyArchive(pending);
-        Path launcher = normalizedHome.resolve("TrueOpsToolkit.jar");
-        ToolkitUpdater.requireSafePath(normalizedHome, launcher);
-        if (!Files.isRegularFile(launcher)) throw new IOException("Toolkit launcher JAR was not found.");
-        Path helper = pending.directory.resolve("updater.jar");
-        ToolkitUpdater.requireSafePath(normalizedHome, helper);
-        Files.copy(launcher, helper, StandardCopyOption.REPLACE_EXISTING);
+        Path helper = prepareInstaller(pending, normalizedHome);
         String processId = ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0];
         if (!processId.matches("[1-9][0-9]{0,18}")) throw new IOException("Cannot identify launcher process.");
         Path java = Paths.get(System.getProperty("java.home"), "bin", isWindows() ? "javaw.exe" : "java");
@@ -171,6 +168,28 @@ public final class ToolkitUpdateManager {
             throw failure;
         }
         log(home, "Update " + pending.version + " scheduled after launcher exit.");
+    }
+
+    /** Use the verified release's helper, so future releases bring their own installer behavior. */
+    static Path prepareInstaller(PendingUpdate pending, Path home) throws IOException {
+        validateStaging(home, pending.directory);
+        verifyArchive(pending);
+        Path verification = Files.createTempDirectory(pending.directory, "helper-source-");
+        try {
+            ToolkitUpdater.extractAndValidate(pending, verification);
+            Path incoming = verification.resolve("TrueOpsToolkit.jar");
+            try (java.util.jar.JarFile jar = new java.util.jar.JarFile(incoming.toFile())) {
+                if (jar.getJarEntry("trueopstoolkit/ToolkitUpdater.class") == null
+                        || jar.getJarEntry("trueopstoolkit/ToolkitUpdateManager.class") == null) {
+                    throw new IOException("The released application is missing its update helper.");
+                }
+            }
+            Path helper = pending.directory.resolve("updater.jar");
+            ToolkitUpdater.requireSafePath(home, helper);
+            Files.copy(incoming, helper, StandardCopyOption.REPLACE_EXISTING);
+            if (!sha256(incoming).equals(sha256(helper))) throw new IOException("Update helper copy was incomplete.");
+            return helper;
+        } finally { ToolkitUpdater.deleteTree(verification); }
     }
 
     /** A newly opened launcher exits promptly while the previous launcher is being updated. */
@@ -219,6 +238,57 @@ public final class ToolkitUpdateManager {
                 Files.deleteIfExists(home.resolve(".updates/installing.properties"));
             }
         } catch (IOException ignored) { /* Marker expiration prevents a stale marker from blocking startup indefinitely. */ }
+    }
+
+    /** A relaunch must never race a stale marker or clear a different installer's marker. */
+    static void completeInstallMarker(Path home, Path stage) throws IOException {
+        Properties marker = readInstallMarker(home);
+        if (marker == null) return;
+        if (!stage.getFileName().toString().equals(marker.getProperty("stage"))) {
+            throw new IOException("A different toolkit installer owns the handoff marker.");
+        }
+        Files.delete(home.resolve(".updates/installing.properties"));
+        if (readInstallMarker(home) != null) throw new IOException("The toolkit handoff marker could not be cleared.");
+    }
+
+    /** Called only after the updated launcher's main window is visible. */
+    static void reportReopened(Path home, String version) {
+        String token = System.getProperty(REOPEN_TOKEN_PROPERTY, "");
+        if (!validVersion(version) || !token.matches("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")) return;
+        Path temporary = null;
+        try {
+            Path file = home.toAbsolutePath().normalize().resolve(REOPEN_ACK);
+            ToolkitUpdater.requireSafePath(home, file);
+            Files.createDirectories(file.getParent());
+            temporary = Files.createTempFile(file.getParent(), ".reopened-", ".tmp");
+            Properties ready = new Properties();
+            ready.setProperty("app.version", version);
+            ready.setProperty("restart.token", token);
+            ready.setProperty("ready", Long.toString(System.currentTimeMillis()));
+            try (OutputStream output = Files.newOutputStream(temporary)) { ready.store(output, "Updated Toolkit window is visible"); }
+            try { Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+            catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException failure) {
+            log(home, "Updated Toolkit opened, but its readiness acknowledgement could not be written.");
+        } finally {
+            if (temporary != null) try { Files.deleteIfExists(temporary); } catch (IOException ignored) { }
+        }
+    }
+
+    static boolean hasReopened(Path home, String version, String token, long launchedAt) throws IOException {
+        Path file = home.toAbsolutePath().normalize().resolve(REOPEN_ACK);
+        ToolkitUpdater.requireSafePath(home, file);
+        if (!Files.isRegularFile(file)) return false;
+        if (Files.size(file) > 4096) throw new IOException("Invalid update readiness acknowledgement.");
+        Properties ready = new Properties();
+        try (InputStream input = Files.newInputStream(file)) { ready.load(input); }
+        long time;
+        try { time = Long.parseLong(ready.getProperty("ready", "0")); }
+        catch (NumberFormatException invalid) { return false; }
+        return version.equals(ready.getProperty("app.version")) && token.equals(ready.getProperty("restart.token"))
+                && time >= launchedAt && time <= System.currentTimeMillis() + 30000;
     }
 
     static PendingUpdate readPlan(Path home, Path directory) throws IOException {

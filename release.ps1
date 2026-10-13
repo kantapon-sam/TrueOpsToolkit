@@ -109,27 +109,6 @@ function Check-AppJar([string]$Path, [string]$ExpectedMain) {
     } finally { $archive.Dispose() }
 }
 
-function Stage-CompatibilityJar([string]$Relative, [bool]$Launcher) {
-    # The 1.0.0 updater requires a TUAR application JAR and one dependency JAR.
-    # Manifest-only bridges satisfy that contract without bundling TUAR code.
-    $target = Join-Path $script:stageRoot $Relative
-    New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
-    $lines = @('Manifest-Version: 1.0', 'Implementation-Title: TrueOps Toolkit compatibility bridge', ('Implementation-Version: ' + $version))
-    if ($Launcher) { $lines += @('Main-Class: trueopstoolkit.ModuleShortcuts$Tuar', 'Class-Path: ../../TrueOpsToolkit.jar') }
-    $archive = [System.IO.Compression.ZipFile]::Open($target, [System.IO.Compression.ZipArchiveMode]::Create)
-    try {
-        $entry = $archive.CreateEntry('META-INF/MANIFEST.MF')
-        $stream = $entry.Open()
-        try {
-            $bytes = [System.Text.Encoding]::ASCII.GetBytes(($lines -join "`r`n") + "`r`n`r`n")
-            $stream.Write($bytes, 0, $bytes.Length)
-        } finally { $stream.Dispose() }
-    } finally { $archive.Dispose() }
-    Assert-ReleaseArchive $target
-    if ($Launcher) { Check-AppJar $target 'trueopstoolkit.ModuleShortcuts$Tuar' }
-    $script:allowed.Add($Relative.Replace('\', '/'))
-}
-
 if (-not $SkipBuild) { & (Join-Path $root 'build.ps1') -JdkHome $JdkHome }
 $dist = Join-Path $root 'dist'
 $stagingParent = [System.IO.Path]::GetFullPath((Join-Path $root 'build\release'))
@@ -172,11 +151,6 @@ foreach ($module in $modules) {
     }
 }
 
-# Preserve the old automatic update contract with two tiny manifest-only JARs.
-# The old TUAR shortcut opens the three-tool launcher; TUAR is a separate app.
-Stage-CompatibilityJar 'modules\tuar\TrueOps-TUAR.jar' $true
-Stage-CompatibilityJar 'modules\tuar\lib\TrueOps-TUAR-compat.jar' $false
-
 $actual = @(Get-ChildItem -LiteralPath $script:stageRoot -File -Recurse | ForEach-Object { $_.FullName.Substring($script:stageRoot.Length + 1).Replace('\', '/') } | Sort-Object)
 foreach ($relative in $actual) { Assert-ReleaseFileName $relative }
 if (@(Compare-Object @($script:allowed | Sort-Object) $actual).Count -ne 0) { throw 'Unexpected release staging contents.' }
@@ -195,5 +169,5 @@ Write-Utf8 (Join-Path $releaseRoot 'update.properties') ("app.version=$version`r
 Write-Host "Release ready: $zipPath"
 Write-Host "SHA256: $hash"
 Write-Host 'Update feed: releases\update.properties (attach it to the same GitHub release).'
-Write-Host 'Contains three PROMS tools, blank preferences/reference lists, and a manifest-only legacy update bridge. No TUAR implementation, workbook, account, runtime settings, logs, or existing driver was copied.'
+Write-Host 'Contains three PROMS tools and blank preferences/reference lists. No TUAR folder, account, runtime settings, logs, or existing driver was copied.'
 Write-Host 'Verified every archive layer: no EXE, BAT, CMD, or standalone ChromeDriver binary.'

@@ -46,9 +46,28 @@ public final class ToolkitUpdater {
 
     private ToolkitUpdater() { }
 
+    /** A small boundary keeps installer lifecycle tests offline and free of child processes. */
+    interface Progress {
+        void update(String message, int percent);
+        void failed(String message);
+        void close();
+    }
+
+    static class UpdateServices {
+        void waitForExit(String processId, Path home) throws IOException, InterruptedException {
+            waitForLauncher(processId, home);
+        }
+        boolean install(ToolkitUpdateManager.PendingUpdate pending, Path home, Progress progress)
+                throws IOException, InterruptedException {
+            return installAfterExit(pending, home, progress);
+        }
+        void restart(Path home, String version) throws IOException { launchUpdatedApplication(home, version); }
+    }
+
     public static void main(String[] args) {
         Path home = null;
         Path stage = null;
+        Progress progress = null;
         try {
             if (args.length != 6 || !"--home".equals(args[0]) || !"--stage".equals(args[2])
                     || !"--pid".equals(args[4]) || !args[5].matches("[1-9][0-9]{0,18}")) {
@@ -56,27 +75,70 @@ public final class ToolkitUpdater {
             }
             home = Paths.get(args[1]).toAbsolutePath().normalize();
             stage = Paths.get(args[3]).toAbsolutePath().normalize();
+            progress = UpdaterProgressWindow.open();
+            progress.update("Reading the verified update plan...", 2);
             ToolkitUpdateManager.PendingUpdate pending = ToolkitUpdateManager.readPlan(home, stage);
-            waitForLauncher(args[5], home);
-            installAfterExit(pending, home);
-            ToolkitUpdateManager.log(home, "Update " + pending.version + " installed. Open TrueOps Toolkit to use it.");
-            cleanupCompleted(stage);
+            runUpdate(pending, home, args[5], progress, new UpdateServices());
         } catch (Exception failure) {
-            // Do not log arbitrary server content, URLs, environment values, or account information.
-            ToolkitUpdateManager.log(home, "Update installation failed (" + failure.getClass().getSimpleName()
-                    + "). Previous application files were retained or restored; staged recovery files remain in .updates.");
+            reportFailure(home, progress, failure);
         } finally {
             ToolkitUpdateManager.clearInstallMarker(home, stage);
         }
     }
 
-    private static void installAfterExit(ToolkitUpdateManager.PendingUpdate pending, Path home)
+    /** Return only after all update locks are released and the handoff marker is removed. */
+    static boolean runUpdate(ToolkitUpdateManager.PendingUpdate pending, Path home, String processId,
+            Progress progress, UpdateServices services) {
+        boolean installed = false;
+        try {
+            show(progress, "Waiting for TrueOps Toolkit to close...", 5);
+            services.waitForExit(processId, home);
+            installed = services.install(pending, home, progress);
+            ToolkitUpdateManager.completeInstallMarker(home, pending.directory);
+            if (!installed) {
+                if (progress != null) progress.failed("This installation is already the same version or newer. "
+                        + "No update was applied. You can open TrueOpsToolkit.jar.");
+                return false;
+            }
+            show(progress, "Update installed. Reopening TrueOps Toolkit v" + pending.version + "...", 98);
+            // install() has left its try-with-resources block; neither file lock crosses this boundary.
+            services.restart(home, pending.version);
+            ToolkitUpdateManager.log(home, "Update " + pending.version + " installed; updated Toolkit started automatically.");
+            cleanupCompleted(pending.directory);
+            show(progress, "TrueOps Toolkit v" + pending.version + " has been reopened.", 100);
+            if (progress != null) progress.close();
+            return true;
+        } catch (Exception failure) {
+            reportFailure(home, progress, failure, installed);
+            return false;
+        } finally {
+            ToolkitUpdateManager.clearInstallMarker(home, pending.directory);
+        }
+    }
+
+    private static void reportFailure(Path home, Progress progress, Exception failure) {
+        reportFailure(home, progress, failure, false);
+    }
+
+    private static void reportFailure(Path home, Progress progress, Exception failure, boolean installed) {
+        // Do not display arbitrary exception text, server content, paths, or account information.
+        ToolkitUpdateManager.log(home, "Update installation or reopening failed (" + failure.getClass().getSimpleName()
+                + "). See earlier status entries for rollback or recovery details; staged files remain in .updates.");
+        if (progress != null) progress.failed(installed
+                ? "TrueOps Toolkit was updated, but it could not reopen automatically. Open TrueOpsToolkit.jar. "
+                    + "Check logs/update.log for details."
+                : "The update could not finish. Check logs/update.log for details. "
+                    + "Keep the .updates folder if recovery is needed.");
+    }
+
+    private static boolean installAfterExit(ToolkitUpdateManager.PendingUpdate pending, Path home, Progress progress)
             throws IOException, InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (true) {
-            try { install(pending, home, null); return; }
+            try { return installWithProgress(pending, home, null, progress); }
             catch (BusyUpdateException busy) {
                 if (System.nanoTime() >= deadline) throw busy;
+                show(progress, "Waiting for active tools to finish...", 8);
                 Thread.sleep(150L); // A promptly reopened launcher sees the handoff marker and exits.
             }
         }
@@ -89,6 +151,11 @@ public final class ToolkitUpdater {
 
     /** Tests call this directly with synthetic releases; no process termination or network is involved. */
     static void install(ToolkitUpdateManager.PendingUpdate pending, Path home, MutationHook hook) throws IOException {
+        installWithProgress(pending, home, hook, null);
+    }
+
+    static boolean installWithProgress(ToolkitUpdateManager.PendingUpdate pending, Path home,
+            MutationHook hook, Progress progress) throws IOException {
         Path target = home.toAbsolutePath().normalize();
         ToolkitUpdateManager.validateStaging(target, pending.directory);
         Path launcherLock = target.resolve(".launcher.lock"), activeLock = target.resolve(".active.lock");
@@ -98,21 +165,25 @@ public final class ToolkitUpdater {
                 FileLock launcher = acquire(launcherChannel);
                 FileChannel activeChannel = FileChannel.open(activeLock, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                 FileLock active = acquire(activeChannel)) {
+            show(progress, "Verifying the downloaded update (SHA-256)...", 10);
             ToolkitUpdateManager.verifyArchive(pending);
             String existing = installedVersion(target);
             if (existing != null && ToolkitUpdateManager.compareVersions(pending.version, existing) <= 0) {
                 ToolkitUpdateManager.log(home, "Skipped a staged release because this installation is already the same version or newer.");
-                return;
+                return false;
             }
             Path work = Files.createTempDirectory(pending.directory, "install-");
             Path incoming = work.resolve("incoming"), backup = work.resolve("backup");
             boolean recoverable = true;
             try {
+                show(progress, "Validating application files and extracting the update...", 20);
                 Set<String> incomingFiles = extractAndValidate(pending, incoming);
                 Set<String> changes = new TreeSet<String>(incomingFiles);
                 changes.addAll(installedLibraries(target)); // Obsolete runtime JARs must not shadow newer dependencies.
                 Set<String> existed = new HashSet<String>();
                 Files.createDirectories(backup);
+                int savedCount = 0;
+                show(progress, "Backing up the current application...", 40);
                 for (String name : changes) {
                     Path destination = target.resolve(name);
                     requireSafePath(target, destination);
@@ -123,18 +194,24 @@ public final class ToolkitUpdater {
                         Files.copy(destination, saved, StandardCopyOption.COPY_ATTRIBUTES);
                         existed.add(name);
                     }
+                    show(progress, "Backing up application files (" + (++savedCount) + "/" + changes.size() + ")...",
+                            40 + savedCount * 15 / changes.size());
                 }
                 List<String> changed = new ArrayList<String>();
                 try {
+                    show(progress, "Installing TrueOps Toolkit v" + pending.version + "...", 55);
                     for (String name : changes) {
                         Path destination = target.resolve(name);
                         requireSafePath(target, destination);
                         changed.add(name); // Include a failing replacement in rollback, too.
                         if (incomingFiles.contains(name)) replaceFile(incoming.resolve(name), destination);
                         else Files.deleteIfExists(destination);
+                        show(progress, "Installing application files (" + changed.size() + "/" + changes.size() + ")...",
+                                55 + changed.size() * 35 / changes.size());
                         if (hook != null) hook.afterChange(changed.size());
                     }
                 } catch (IOException | RuntimeException failure) {
+                    show(progress, "The update failed. Restoring the previous application...", 0);
                     IOException restoreFailure = null;
                     Collections.reverse(changed);
                     for (String name : changed) {
@@ -152,12 +229,65 @@ public final class ToolkitUpdater {
                         recoverable = false;
                         failure.addSuppressed(restoreFailure);
                         ToolkitUpdateManager.log(target, "Rollback needs recovery from .updates backup; do not remove the staged backup.");
-                    } else ToolkitUpdateManager.log(target, "Update failed; rollback restored all previous application files.");
+                    } else {
+                        show(progress, "The previous application was restored.", 0);
+                        ToolkitUpdateManager.log(target, "Update failed; rollback restored all previous application files.");
+                    }
                     throw failure;
                 }
             } finally {
                 // Retain backups when restoration itself failed, so nothing destroys the recovery copy.
                 if (recoverable) deleteTree(work);
+            }
+        }
+        return true;
+    }
+
+    private static void show(Progress progress, String message, int percent) {
+        if (progress != null) progress.update(message, percent);
+    }
+
+    static List<String> restartCommand(Path home, String version) throws IOException {
+        if (!ToolkitUpdateManager.validVersion(version)) throw new IOException("Invalid restarted application version.");
+        Path target = home.toAbsolutePath().normalize();
+        Path launcher = target.resolve("TrueOpsToolkit.jar");
+        requireSafePath(target, launcher);
+        if (!Files.isRegularFile(launcher, LinkOption.NOFOLLOW_LINKS)) throw new IOException("Updated launcher was not found.");
+        Path java = Paths.get(System.getProperty("java.home"), "bin", ToolkitUpdateManager.isWindows() ? "javaw.exe" : "java");
+        if (!Files.isRegularFile(java)) throw new IOException("Java runtime was not found.");
+        return Arrays.asList(java.toString(), "-Dfile.encoding=UTF-8", "-jar", launcher.toString(), "--updated", version);
+    }
+
+    private static void launchUpdatedApplication(Path home, String version) throws IOException {
+        if (ToolkitUpdateManager.isInstallPending(home)) throw new IOException("Update handoff marker still blocks reopening.");
+        Path log = home.resolve("logs/update.log");
+        requireSafePath(home, log);
+        Files.createDirectories(log.getParent());
+        Path acknowledgement = home.resolve(ToolkitUpdateManager.REOPEN_ACK);
+        requireSafePath(home, acknowledgement);
+        Files.deleteIfExists(acknowledgement);
+        String token = java.util.UUID.randomUUID().toString();
+        List<String> command = new ArrayList<String>(restartCommand(home, version));
+        command.add(2, "-D" + ToolkitUpdateManager.REOPEN_TOKEN_PROPERTY + "=" + token);
+        long launchedAt = System.currentTimeMillis();
+        Process child = new ProcessBuilder(command).directory(home.toFile()).redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.appendTo(log.toFile())).start();
+        waitForReopened(child, home, version, token, launchedAt, TimeUnit.SECONDS.toMillis(45));
+        Files.deleteIfExists(acknowledgement);
+    }
+
+    static void waitForReopened(Process child, Path home, String version, String token, long launchedAt,
+            long timeoutMillis) throws IOException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        while (true) {
+            // A window may acknowledge readiness and then be closed promptly by its user.
+            if (ToolkitUpdateManager.hasReopened(home, version, token, launchedAt)) return;
+            if (!child.isAlive()) throw new IOException("Updated Toolkit exited before showing its main window.");
+            if (System.nanoTime() >= deadline) throw new IOException("Updated Toolkit did not confirm that its main window opened.");
+            try { Thread.sleep(100); }
+            catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Waiting for updated Toolkit was interrupted.", interrupted);
             }
         }
     }

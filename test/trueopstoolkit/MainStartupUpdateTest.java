@@ -69,9 +69,12 @@ public final class MainStartupUpdateTest {
                     frame.updateCheckCompleted(services.pending,null);
                     check(services.offers.get()==2,"Manual check uses the new-version dialog too");
                     frame.dispatchEvent(new WindowEvent(frame,WindowEvent.WINDOW_CLOSING));
+                } catch(Exception error){throw new RuntimeException(error);}
+            });
+            waitUntil(() -> services.installs.get()==1 && !frame.isDisplayable(),"Later hands off the update before closing");
+            SwingUtilities.invokeAndWait(() -> {
                     check(services.installs.get()==1,"Later installs on normal close");
                     check(!frame.isDisplayable(),"Normal close disposes the launcher");
-                } catch(Exception error){throw new RuntimeException(error);}
             });
         } finally {services.releaseApp.countDown();cleanup(frame);}
     }
@@ -128,7 +131,7 @@ public final class MainStartupUpdateTest {
                 } catch(Exception error){throw new RuntimeException(error);}
             });
             services.releaseDriver.countDown();
-            waitUntil(() -> services.installs.get()==1,"Deferred close installs after checks finish");
+            waitUntil(() -> services.installs.get()==1 && !frame.isDisplayable(),"Deferred close installs after checks finish");
             SwingUtilities.invokeAndWait(() -> {
                 try {
                     check(!frame.isDisplayable(),"Deferred close disposes launcher");

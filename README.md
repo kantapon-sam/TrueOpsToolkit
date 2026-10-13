@@ -2,11 +2,11 @@
 
 A Windows desktop launcher for three PROMS tools, with one encrypted shared account and one active tool at a time.
 
-**Current version: 1.0.1** · [Download the latest release](https://github.com/kantapon-sam/TrueOpsToolkit/releases/latest) · [Changelog](CHANGELOG.md)
+**Current version: 1.0.2** · [Download the latest release](https://github.com/kantapon-sam/TrueOpsToolkit/releases/latest) · [Changelog](CHANGELOG.md)
 
 ## Get started
 
-1. Download `TrueOpsToolkit-1.0.1-windows.zip` from Releases and extract the complete folder.
+1. Download `TrueOpsToolkit-1.0.2-windows.zip` from Releases and extract the complete folder.
 2. Open `TrueOpsToolkit.jar` directly. Windows, Java 8 or later, Windows PowerShell, and Google Chrome are required. If JAR files are not associated with Java, run `java -jar TrueOpsToolkit.jar` from the extracted folder.
 3. Select **Shared account**, enter your username and password, and save. All three tools use this account.
 4. Open a tool, configure its settings and request list, and review the data before starting.
@@ -17,7 +17,7 @@ A Windows desktop launcher for three PROMS tools, with one encrypted shared acco
 | Approve by Ref | Reference number, type, and description table | `TrueOps-ApproveByRef.jar` |
 | Delete Site | Reference number and deletion reason table | `TrueOps-DeleteSite.jar` |
 
-The launcher and all three tools use an English interface. Opening an individual module JAR also starts the Toolkit and uses the shared account. Application filenames stay the same between releases; the complete Toolkit uses one version number. Request TUAR is now a separate application and is no longer offered in the Toolkit. The release retains a small legacy TUAR shortcut and compatibility marker so installations of 1.0.0 can update automatically. That shortcut opens the three-tool Toolkit; the TUAR implementation, dependencies, and workbook are not included.
+The launcher and all three tools use an English interface. Opening an individual module JAR also starts the Toolkit and uses the shared account. Application filenames stay the same between releases; the complete Toolkit uses one version number. Request TUAR is a separate application. Its folder, shortcut, implementation, libraries, and input templates are excluded from the Toolkit release and current source.
 
 The release ZIP contains no ChromeDriver binary, `.exe`, `.bat`, or `.cmd` files, including inside bundled JARs. ChromeDriver is downloaded automatically from Google when the Toolkit starts. An internet connection is required for that first download. Java and Chrome must already be installed; their installers are not bundled.
 
@@ -37,11 +37,15 @@ Delete Site asks for confirmation before starting. Stopping or closing a tool do
 
 ## Automatic updates
 
-**Startup dialog:** Opening the Toolkit automatically checks both the application and ChromeDriver. A progress dialog shows the checks and downloads; you do not need to press a check button. If a new application version is ready, select **Update now** to close the Toolkit and install it, or **Later** to install when you finish and close the Toolkit. Open the app again after installation to use the new version. Updates never stop an active tool.
+**Startup dialog:** Opening the Toolkit automatically checks both the application and ChromeDriver. A progress dialog shows the checks and downloads; you do not need to press a check button. If a new application version is ready, select **Update now** to close the Toolkit and install it, or **Later** to install when you finish and close the Toolkit. Updates never stop an active tool.
+
+**Installation progress and reopen:** After the Toolkit closes, the installer displays its status while waiting for application files, verifying the update, and installing the new version. It keeps a backup so it can restore the previous application files if installation fails. After a successful installation, it automatically opens the updated Toolkit.
 
 **Toolkit application:** The launcher downloads newer releases from GitHub and verifies SHA256 against the release descriptor. Installation runs after the Toolkit closes and no module is active. The updater preserves the encrypted account, settings, Excel workbooks, CSV files, attachments, ChromeDriver, and logs. **Check for updates** remains available for an additional manual check. The installed version remains usable if the network is unavailable.
 
 **ChromeDriver:** All three tools use the same `drivers/chromedriver.exe`. The Toolkit automatically checks the installed Chrome version and downloads the latest compatible driver from Google at startup and before opening Chrome. If the network is unavailable, an existing driver is used only if it is compatible, and the status is displayed. **Update ChromeDriver** remains available for an additional check while no task is open. The **Update / test Chrome** button in a PROMS tool also opens a local test page.
+
+**Upgrading older installations:** The updater already installed in 1.0.1 cannot gain the new installation dialog or automatic reopen before installing 1.0.2. Open the Toolkit once after that upgrade; subsequent updates use the new installer. Version 1.0.0 requires the retired TUAR files during update validation, so moving to this three-tool release requires one manual upgrade. Extract the new release into a separate folder, then copy your `config/credentials.dat` and each PROMS module's `settings.csv` or legacy `Login.txt`, `Ref_No.csv`, and any other personal task data into the matching locations before opening it. Copy only personal data, keeping the newly extracted application JARs and libraries. The encrypted account remains usable under the Windows account and computer where it was saved.
 
 ## Local data
 
@@ -56,7 +60,9 @@ When built from source, runtime files are in `dist`. In a release, they are in t
 | `drivers` | Shared ChromeDriver |
 | `logs` | Launcher and task logs |
 
-Rebuilding preserves existing runtime data and never restores private files from `tools/*/seed`. Distribute the ZIP created by `release.ps1`, which generates blank input files. A personal `dist` folder contains user data and is not a release package.
+When an existing Toolkit installation contains `modules/tuar`, its legacy data is archived outside the Toolkit under `%LOCALAPPDATA%\TrueOpsToolkit\backups` before that retired folder is removed. The same retirement applies when rebuilding an existing `dist` folder. PROMS runtime data is preserved, and builds never restore private files from `tools/*/seed`.
+
+Distribute the ZIP created by `release.ps1`, which generates blank input files. A personal `dist` folder contains user data and is not a release package.
 
 ## Build and test
 

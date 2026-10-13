@@ -30,10 +30,13 @@ public final class Main extends JFrame {
     private boolean startupChecking;
     private boolean closeAfterUpdate;
     private boolean updatingDriver;
+    private boolean installingUpdate;
+    private boolean reopenedAfterUpdate;
     private final Path smokeReport;
     private final javax.swing.Timer refreshTimer;
     private final UpdateServices updates;
     private StartupUpdateDialog startupDialog;
+    private UpdateHandoffDialog handoffDialog;
     private ModuleSpec requestedModule;
     Main(Path home,Path smokeReport) {
         this(home,smokeReport,new UpdateServices());
@@ -89,6 +92,7 @@ public final class Main extends JFrame {
             return StartupUpdateDialog.offerUpdate(owner,pending.getVersion(),canInstallNow);
         }
         void showStartupIssues(Main owner,String appIssue,String driverIssue) {StartupUpdateDialog.showIssues(owner,appIssue,driverIssue);}
+        void showInstallFailure(Main owner,Throwable failure) {Ui.showError(owner,failure);}
     }
     private static final class StartupResult {
         ToolkitUpdateManager.PendingUpdate available;
@@ -153,6 +157,7 @@ public final class Main extends JFrame {
         updateStatus.setText(failed?"Startup checks incomplete • Check your connection and retry from the launcher":
                 pendingUpdate==null?"Toolkit and shared ChromeDriver are ready • Checked automatically at startup":
                 "v"+pendingUpdate.getVersion()+" is ready • Shared ChromeDriver is ready");
+        if(reopenedAfterUpdate)updateStatus.setText("Updated to v"+AppVersion.current()+" • "+updateStatus.getText());
         refresh();
         if(closeAfterUpdate){finishClose();return;}
         if(failed)updates.showStartupIssues(this,issue(result.appFailure),issue(result.driverFailure));
@@ -190,16 +195,40 @@ public final class Main extends JFrame {
         if(pendingUpdate!=null && updates.offerUpdate(this,pendingUpdate,canInstallNow()))finishClose();
     }
     private boolean canInstallNow() {
-        if(controller.active() || updatingDriver || startupChecking || checkingUpdate)return false;
+        if(controller.active() || updatingDriver || startupChecking || checkingUpdate || installingUpdate)return false;
         try {return !ProcessController.busy(home);}catch(IOException failure){return false;}
     }
     private void finishClose() {
+        if(installingUpdate)return;
         if(!canInstallNow()) {
             closeAfterUpdate=false;refresh();updateStatus.setText("Close active tools before exiting or installing the Toolkit update.");return;
         }
         closeAfterUpdate=true;
-        if(pendingUpdate!=null)try{updates.install(pendingUpdate,home);}catch(IOException ex){Ui.showError(Main.this,ex);}
+        if(pendingUpdate!=null) {
+            installingUpdate=true;refresh();
+            updateStatus.setText("Installing v"+pendingUpdate.getVersion()+" • Toolkit will reopen automatically");
+            if(startupDialog!=null){startupDialog.dispose();startupDialog=null;}
+            handoffDialog=new UpdateHandoffDialog(this,pendingUpdate.getVersion());handoffDialog.setVisible(true);
+            final ToolkitUpdateManager.PendingUpdate installing=pendingUpdate;
+            new SwingWorker<Void,Void>() {
+                @Override protected Void doInBackground() throws Exception {updates.install(installing,home);return null;}
+                @Override protected void done() {
+                    try {get();closeLauncher();}
+                    catch(Exception failure) {
+                        installingUpdate=false;closeAfterUpdate=false;
+                        if(handoffDialog!=null){handoffDialog.dispose();handoffDialog=null;}
+                        refresh();updateStatus.setText("Update could not start • The current Toolkit remains open; retry when ready");
+                        updates.showInstallFailure(Main.this,failure.getCause()==null?failure:failure.getCause());
+                    }
+                }
+            }.execute();
+            return;
+        }
+        closeLauncher();
+    }
+    private void closeLauncher() {
         if(startupDialog!=null){startupDialog.dispose();startupDialog=null;}
+        if(handoffDialog!=null){handoffDialog.dispose();handoffDialog=null;}
         refreshTimer.stop();dispose();
     }
     private void requestModule(ModuleSpec module){if(startupChecking){requestedModule=module;return;}openModule(module);}
@@ -212,6 +241,7 @@ public final class Main extends JFrame {
         sharedAccount.setEnabled(!active && !external && !updatingDriver && !closeAfterUpdate && !startupChecking);
         checkUpdate.setEnabled(!checkingUpdate && !closeAfterUpdate && !startupChecking);
         stop.setEnabled(active);openLog.setEnabled(controller.log()!=null);
+        if(installingUpdate){status.setText("Preparing installation • Please wait; Toolkit will reopen automatically");return;}
         if(closeAfterUpdate){status.setText("Closing after the update check and download finish...");return;}
         if(startupChecking){status.setText("Preparing Toolkit and shared ChromeDriver • Please wait...");return;}
         if(updatingDriver)return;
@@ -249,10 +279,19 @@ public final class Main extends JFrame {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {try{instanceLock.release();instanceChannel.close();}catch(Exception ignored){}},"launcher-lock"));
         try(FileChannel channel=FileChannel.open(home.resolve(".active.lock"),StandardOpenOption.CREATE,StandardOpenOption.WRITE)) {
             FileLock migrationLock=channel.tryLock();
-            if(migrationLock!=null)try{SharedCredentialsMigration.migrate(home);SettingsFiles.migrate(home);}finally{migrationLock.release();}
+            if(migrationLock!=null)try{
+                try {RetiredModules.archiveTuar(home);}
+                catch(IOException failure){JOptionPane.showMessageDialog(null,"Could not finish archiving legacy TUAR files. The recovery data has been kept.\n"+failure.getMessage(),"Toolkit cleanup",JOptionPane.WARNING_MESSAGE);}
+                SharedCredentialsMigration.migrate(home);SettingsFiles.migrate(home);
+            }finally{migrationLock.release();}
         } catch(IOException ex){JOptionPane.showMessageDialog(null,"Could not migrate the existing account or settings. Open Shared account or tool settings to review them.\n"+ex.getMessage(),"Account and settings",JOptionPane.WARNING_MESSAGE);}
         final ModuleSpec requested=args.length==2 && "--module".equals(args[0])?ModuleSpec.byId(args[1]):null;
-        SwingUtilities.invokeLater(() -> {Main frame=new Main(home,null);frame.setVisible(true);if(requested!=null)frame.requestModule(requested);});
+        final boolean reopened=args.length==2 && "--updated".equals(args[0]) && AppVersion.current().equals(args[1]);
+        SwingUtilities.invokeLater(() -> {
+            Main frame=new Main(home,null);frame.reopenedAfterUpdate=reopened;frame.setVisible(true);
+            if(reopened)ToolkitUpdateManager.reportReopened(home,AppVersion.current());
+            if(requested!=null)frame.requestModule(requested);
+        });
     }
     private static void smoke(Path home,Path report) throws Exception {
         if(ProcessController.busy(home))throw new IOException("Close active module before UI tests.");
