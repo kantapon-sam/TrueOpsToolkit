@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="TrueOpsToolkit" default="jar" basedir=".">
+    <description>TrueOps Toolkit: isolated Java 8 modules and desktop launcher.</description>
+    <property file="version.properties"/>
+    <property file="nbproject/project.properties"/>
+    <property name="build.dir" location="build"/>
+    <property name="dist.dir" location="dist"/>
+
+    <macrodef name="build-module">
+        <attribute name="id"/>
+        <attribute name="jar"/>
+        <attribute name="main"/>
+        <attribute name="legacy"/>
+        <sequential>
+            <mkdir dir="${build.dir}/modules/@{id}"/>
+            <mkdir dir="${dist.dir}/modules/@{id}/lib"/>
+            <javac srcdir="tools/@{id}/src" sourcepath="tools/@{id}/src"
+                   destdir="${build.dir}/modules/@{id}" source="1.8" target="1.8"
+                   encoding="UTF-8" includeantruntime="false">
+                <classpath><fileset dir="tools/@{id}/lib" includes="*.jar" excludes="*-sources.jar"/></classpath>
+            </javac>
+            <copy todir="${build.dir}/modules/@{id}">
+                <fileset dir="tools/@{id}/src" excludes="**/*.java,**/*.form"/>
+            </copy>
+            <copy todir="${dist.dir}/modules/@{id}/lib">
+                <fileset dir="tools/@{id}/lib" includes="*.jar"/>
+            </copy>
+            <!-- Preserve runtime data, but never copy private seeds or old credentials. -->
+            <manifestclasspath property="module.@{id}.classpath" jarfile="${dist.dir}/modules/@{id}/@{jar}">
+                <classpath><pathelement location="${dist.dir}/TrueOpsToolkit.jar"/><fileset dir="${dist.dir}/modules/@{id}/lib" includes="*.jar"/></classpath>
+            </manifestclasspath>
+            <jar destfile="${dist.dir}/modules/@{id}/@{jar}" basedir="${build.dir}/modules/@{id}">
+                <manifest>
+                    <attribute name="Main-Class" value="@{main}"/>
+                    <attribute name="Implementation-Title" value="TrueOps Toolkit"/>
+                    <attribute name="Implementation-Version" value="${app.version}"/>
+                    <attribute name="Class-Path" value="${module.@{id}.classpath}"/>
+                </manifest>
+            </jar>
+            <delete file="${dist.dir}/modules/@{id}/@{legacy}"/>
+        </sequential>
+    </macrodef>
+
+    <target name="validate-version">
+        <fail message="version.properties must define app.version as MAJOR.MINOR.PATCH (optional prerelease label).">
+            <condition><not><matches string="${app.version}" pattern="^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$"/></not></condition>
+        </fail>
+    </target>
+    <target name="modules" depends="validate-version" description="Build all four isolated tools; preserve runtime data.">
+        <build-module id="tuar" jar="TrueOps-TUAR.jar" legacy="AutoRequestTUAR.jar" main="trueopstoolkit.ModuleShortcuts$Tuar"/>
+        <build-module id="approve" jar="TrueOps-Approve.jar" legacy="ApproveProms_TrueCorp_V3.jar" main="trueopstoolkit.ModuleShortcuts$Approve"/>
+        <build-module id="approve-ref" jar="TrueOps-ApproveByRef.jar" legacy="ApproveProms_Ref.jar" main="trueopstoolkit.ModuleShortcuts$Ref"/>
+        <build-module id="delete" jar="TrueOps-DeleteSite.jar" legacy="Delete_Site_TrueCorp.jar" main="trueopstoolkit.ModuleShortcuts$Delete"/>
+    </target>
+    <target name="compile" depends="validate-version" description="Compile the desktop launcher.">
+        <mkdir dir="${build.dir}/classes"/>
+        <javac srcdir="src" sourcepath="src" destdir="${build.dir}/classes"
+               source="1.8" target="1.8" encoding="UTF-8" includeantruntime="false"/>
+        <copy todir="${build.dir}/classes"><fileset dir="src" excludes="**/*.java,**/*.form"/></copy>
+        <copy file="version.properties" tofile="${build.dir}/classes/trueopstoolkit/version.properties" overwrite="true"/>
+    </target>
+    <target name="jar" depends="modules,compile" description="Build the portable dist folder.">
+        <mkdir dir="${dist.dir}"/>
+        <jar destfile="${dist.dir}/TrueOpsToolkit.jar" basedir="${build.dir}/classes" manifest="manifest.mf">
+            <manifest><attribute name="Implementation-Version" value="${app.version}"/></manifest>
+        </jar>
+        <copy file="version.properties" todir="${dist.dir}" overwrite="true"/>
+    </target>
+    <target name="run" depends="jar" description="Run TrueOps Toolkit (NetBeans F6).">
+        <java jar="${dist.dir}/TrueOpsToolkit.jar" fork="true" dir="${dist.dir}" failonerror="true"/>
+    </target>
+    <target name="clean" description="Clean only generated classes; retain portable runtime and user data.">
+        <delete dir="${basedir}/build"/>
+        <echo>Runtime files in dist are preserved.</echo>
+    </target>
+    <target name="rebuild" depends="clean,jar"/>
+    <target name="test" depends="jar" description="Run offline process, window, and browser checks.">
+        <exec executable="powershell.exe" dir="${basedir}" failonerror="true">
+            <arg value="-NoProfile"/><arg value="-File"/><arg path="test.ps1"/>
+            <arg value="-JdkHome"/><arg value="${java.home}"/>
+        </exec>
+    </target>
+    <target name="javadoc" depends="compile">
+        <javadoc sourcepath="src" destdir="${build.dir}/javadoc" encoding="UTF-8" failonerror="false"/>
+    </target>
+</project>
