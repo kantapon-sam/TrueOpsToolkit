@@ -99,12 +99,14 @@ function openApproval() {
     if (selected.length!==1) { window.fixture.wrongSelections.push(selected); saveMetrics(); return; }
     window.fixture.modalOpens++;
     saveMetrics();
-    var missing = state.mode.indexOf('missing-confirm')>=0 ? '' : '<button ng-click="paOkModal()" onclick="confirmApproval()">OK</button>';
+    // Match PROMS: the comment confirmation itself has a checkmark, before any response exists.
+    var missing = state.mode.indexOf('missing-confirm')>=0 ? '' : '<button ng-click="check(model.entities); paOkModal();" onclick="confirmApproval()"><i class="glyphicon glyphicon-ok"></i>OK</button>';
     if (state.mode.indexOf('ambiguous-confirm')>=0) missing += '<button ng-click="paOkModal()" onclick="confirmApproval()">Duplicate OK</button>';
     var type = detailRef ? detailType : selectedRows[0].getAttribute('data-type');
     var extraComment = state.mode.indexOf('ambiguous-comment')>=0 ? '<textarea ng-model="commentDesc">Unrelated visible comment</textarea>' : '';
     var form = '<div class="modal" id="approvalModal" data-ref="'+escapeHtml(selected[0])+'" data-type="'+escapeHtml(type)+'"><h2>Approval comment</h2><textarea ng-model="commentDesc">Old stale comment</textarea>'+extraComment+missing+'</div>';
     if (state.mode.indexOf('ambiguous-form')>=0) form += form.replace('id="approvalModal"','id="approvalModalSecond"');
+    if (state.mode.indexOf('stale-response')>=0) form += '<div class="modal" id="success_s_modal"><button class="ok">Earlier response</button></div>';
     document.getElementById('dialogs').innerHTML = form;
 }
 function confirmApproval() {
@@ -115,10 +117,14 @@ function confirmApproval() {
     fetch('/approve',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(response) { return response.json(); }).then(function(value) {
         setTimeout(function() {
             if (value.ok) {
-                var response = '<div class="modal modal-success alert-success" id="successModal"><h2>Success</h2><p>'+escapeHtml(value.message)+'</p><button onclick="dismissSuccess()"><i class="glyphicon glyphicon-ok"></i>OK</button></div>';
-                if (state.mode.indexOf('ambiguous-ack')>=0) response += response.replace('id="successModal"','id="successModalSecond"');
-                document.getElementById('dialogs').innerHTML = response;
-            } else document.getElementById('dialogs').innerHTML = '<div class="modal alert-danger"><h2>Approval failed</h2><p>'+escapeHtml(value.message)+'</p><button onclick="document.getElementById(\'dialogs\').innerHTML=\'\'">Close</button></div>';
+                var response = '<div class="modal modal-success alert-success" id="success_s_modal" style="z-index:1500"><h2>Success</h2><p>'+escapeHtml(value.message)+'</p><button class="ok" onclick="dismissSuccess()"><i class="glyphicon glyphicon-ok"></i>OK</button></div>';
+                if (state.mode.indexOf('ambiguous-ack')>=0) response += response.replace('id="success_s_modal"','id="successModalSecond"');
+                if (state.mode.indexOf('generic-checkmark')>=0) response = response.replace('id="success_s_modal"','id="unrelatedModal"');
+                if (state.mode.indexOf('duplicate-response-button')>=0) response = response.replace('</div>','<button class="ok" onclick="dismissSuccess()">Other OK</button></div>');
+                if (state.mode.indexOf('replaced-comment')>=0) document.getElementById('dialogs').innerHTML = '';
+                // PROMS closes its comment modal only inside the success acknowledgement callback.
+                document.getElementById('dialogs').insertAdjacentHTML('beforeend',response);
+            } else document.getElementById('dialogs').insertAdjacentHTML('beforeend','<div class="modal alert-danger" style="z-index:1500"><h2>Approval failed</h2><p>'+escapeHtml(value.message)+'</p><button onclick="document.getElementById(\'dialogs\').innerHTML=\'\'">Close</button></div>');
         },450);
     });
 }

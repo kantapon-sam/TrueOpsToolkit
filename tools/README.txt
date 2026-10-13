@@ -1,7 +1,7 @@
 TrueOps Toolkit module sources
 =============================
 
-Version 1.1.0 includes an English launcher and English interfaces for four PROMS tools.
+Version 1.1.1 includes an English launcher and English interfaces for four PROMS tools.
 
 approve     Approve PROMS      TrueOps-Approve.jar
 approve-ref Approve by Ref     TrueOps-ApproveByRef.jar
@@ -52,9 +52,9 @@ match, and blank fields are ignored. Existing Search values separated by
 && remain compatible. Matching ignores letter case. Standalone TK codes
 match complete Request Type category tokens before the site suffix, never
 similar codes or text in project, requester, or site fields.
-Approve PROMS, Approve by Ref, and TK07 Review have SearchDelayMs from
-1000 to 10000, defaulting to 2000. Actual loading and response checks remain
-required. Verified native Angular filtered data avoids visiting every page
+Approve PROMS, Approve by Ref, and TK07 Review wait for the page and the
+current search result automatically. No manual delay setting is required.
+Legacy SearchDelayMs is ignored. Verified Angular filtered data avoids visiting every page
 to collect candidates; unsupported layouts retain checked pagination.
 Each approval still rechecks and selects its exact pending reference.
 Approve by Ref matches complete references and request-category tokens

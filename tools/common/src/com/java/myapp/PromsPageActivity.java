@@ -100,7 +100,7 @@ final class PromsPageActivity {
             "  if(typeof s.angularTable.settings==='function')tableLoading=!!s.angularTable.settings().$loading;",
             "  if(dataReady&&g.submitted){var fields=['requestNo','projectCode','projectName','requesterName','typeDisplay','receivedDate'],query=String(g.query).toLowerCase();for(var i=0;i<scope.pa.tasks.length;i++){var item=scope.pa.tasks[i],matched=false;for(var j=0;j<fields.length;j++){var value=item&&item[fields[j]];if(typeof value==='string'&&value.toLowerCase().indexOf(query)>=0){matched=true;break;}}if(!matched){queryMatches=false;break;}}}",
             "}",
-            "return {started:g.started,pending:g.pending,completed:g.completed,matchedCompleted:g.matchedCompleted,failed:g.failed,rows:g.rows,timers:g.timers,submitted:g.submitted,angularPending:angularPending,jqueryPending:jqueryPending,tableLoading:tableLoading,dataReady:dataReady,queryMatches:queryMatches,filterPending:g.angularPending,filterCompleted:g.angularCompleted,knownFilter:!!s.angularTable};");
+            "return {documentReady:document.readyState==='complete',started:g.started,pending:g.pending,completed:g.completed,matchedCompleted:g.matchedCompleted,failed:g.failed,rows:g.rows,timers:g.timers,submitted:g.submitted,angularPending:angularPending,jqueryPending:jqueryPending,tableLoading:tableLoading,dataReady:dataReady,queryMatches:queryMatches,filterPending:g.angularPending,filterCompleted:g.angularCompleted,knownFilter:!!s.angularTable};");
 
     private static final String NATIVE_ROWS=String.join("\n",
             "var s=window[arguments[0]],id=arguments[1];if(!s||!s.current||s.current.id!==id||!s.angularScope||!s.angularTable)return null;",
@@ -141,7 +141,7 @@ final class PromsPageActivity {
     static boolean responseComplete(WebDriver driver,long generation) {
         Map<?,?> activity=activity(driver,generation);
         if(count(activity,"failed")>0)throw new IllegalStateException("A pending-list request failed. No empty or stale result will be treated as an approval confirmation.");
-        if(!Boolean.TRUE.equals(activity.get("submitted"))||count(activity,"pending")>0
+        if(!Boolean.TRUE.equals(activity.get("documentReady"))||!Boolean.TRUE.equals(activity.get("submitted"))||count(activity,"pending")>0
                 ||count(activity,"timers")>0||count(activity,"angularPending")>0
                 ||count(activity,"jqueryPending")>0||Boolean.TRUE.equals(activity.get("tableLoading"))
                 ||!Boolean.TRUE.equals(activity.get("dataReady"))||count(activity,"filterPending")>0)return false;
@@ -156,7 +156,7 @@ final class PromsPageActivity {
 
     static boolean idle(WebDriver driver,long generation) {
         Map<?,?> activity=activity(driver,generation);
-        return count(activity,"pending")==0&&count(activity,"timers")==0&&count(activity,"angularPending")==0
+        return Boolean.TRUE.equals(activity.get("documentReady"))&&count(activity,"pending")==0&&count(activity,"timers")==0&&count(activity,"angularPending")==0
                 &&count(activity,"jqueryPending")==0&&!Boolean.TRUE.equals(activity.get("tableLoading"))
                 &&Boolean.TRUE.equals(activity.get("dataReady"))&&count(activity,"filterPending")==0;
     }

@@ -18,7 +18,6 @@ final class ModuleWindow extends JFrame {
     private final JTextArea status=Ui.note("");
     private final JTextField username=new JTextField(26),search=new JTextField(26),description=new JTextField(26),approvalDescription=new JTextField(26),rejectionDescription=new JTextField(26);
     private final JTextField searchSecond=new JTextField(26),searchThird=new JTextField(26),searchFourth=new JTextField(26);
-    private final JSpinner searchDelay=new JSpinner(new SpinnerNumberModel(2000,1000,10000,500));
     private final JButton sharedAccount=new JButton("Shared account settings");
     private final DefaultTableModel tableModel;
     private final JTable table;
@@ -55,7 +54,7 @@ final class ModuleWindow extends JFrame {
             else addRow(form,row++,"Description",description);
             addRow(form,row++,"",Ui.note("Fill at least one condition. Every filled condition must match; letter case is ignored.\nTK codes (e.g. TK09) match Request Type only. Enter one term per field."));
         }
-        if(module!=ModuleSpec.DELETE){addRow(form,row++,"Search wait (ms)",searchDelay);addRow(form,row++,"",Ui.note("2000 ms = 2 seconds. The tool also waits for the current result to finish loading."));}
+        if(module!=ModuleSpec.DELETE)addRow(form,row++,"",Ui.note("The tool waits for the page and each search result to finish loading automatically."));
         addRow(form,row++,"",Ui.note("Your shared username and password are encrypted by Windows.\nSign in is automatic. Complete CAPTCHA if the selected portal requests it."));
         GridBagConstraints spacer=new GridBagConstraints();spacer.gridy=row;spacer.weighty=1;form.add(new JPanel(),spacer);
         tabs.addTab("Login / Settings",new JScrollPane(form));
@@ -87,7 +86,7 @@ final class ModuleWindow extends JFrame {
         setSize(980,710);setMinimumSize(new Dimension(920,630));setLocationRelativeTo(null);
         DocumentListener changes=new DocumentListener(){public void insertUpdate(DocumentEvent e){changed();}public void removeUpdate(DocumentEvent e){changed();}public void changedUpdate(DocumentEvent e){changed();}};
         search.getDocument().addDocumentListener(changes);description.getDocument().addDocumentListener(changes);
-        searchSecond.getDocument().addDocumentListener(changes);searchThird.getDocument().addDocumentListener(changes);searchFourth.getDocument().addDocumentListener(changes);searchDelay.addChangeListener(event->changed());
+        searchSecond.getDocument().addDocumentListener(changes);searchThird.getDocument().addDocumentListener(changes);searchFourth.getDocument().addDocumentListener(changes);
         approvalDescription.getDocument().addDocumentListener(changes);rejectionDescription.getDocument().addDocumentListener(changes);
         tableModel.addTableModelListener(e -> changed());loadSettings();
         addWindowListener(new WindowAdapter(){@Override public void windowClosing(WindowEvent e){
@@ -107,7 +106,7 @@ final class ModuleWindow extends JFrame {
     private void loadSettings() {
         loading=true;
         try {
-            settings.load();refreshAccount();String[] terms=settings.search.split("&&",module==ModuleSpec.TK07?2:4);JTextField[] criteria={search,searchSecond,searchThird,searchFourth};for(int index=0;index<criteria.length;index++)criteria[index].setText(index<terms.length?terms[index].trim():"");searchDelay.setValue(settings.searchDelayMs);description.setText(settings.description);approvalDescription.setText(settings.approvalDescription);rejectionDescription.setText(settings.rejectionDescription);
+            settings.load();refreshAccount();String[] terms=settings.search.split("&&",module==ModuleSpec.TK07?2:4);JTextField[] criteria={search,searchSecond,searchThird,searchFourth};for(int index=0;index<criteria.length;index++)criteria[index].setText(index<terms.length?terms[index].trim():"");description.setText(settings.description);approvalDescription.setText(settings.approvalDescription);rejectionDescription.setText(settings.rejectionDescription);
             tableModel.setRowCount(0);for(String[] row:settings.rows)tableModel.addRow(row);
             loaded=true;clean();status.setText("Ready to edit • Save settings to keep your changes.\nStart saves the current settings and runs "+module.title+".");
         } catch(Exception ex) {loaded=false;status.setText("Could not load settings: "+ex.getMessage()+"\nCheck the files in the data folder, then click Reload saved settings.");}
@@ -117,8 +116,7 @@ final class ModuleWindow extends JFrame {
     private void collect() throws IOException {
         finishEditing();
         if(module==ModuleSpec.APPROVE || module==ModuleSpec.TK07){java.util.List<String> terms=new java.util.ArrayList<>();JTextField[] criteria={search,searchSecond,searchThird,searchFourth};int count=module==ModuleSpec.APPROVE?4:2;for(int index=0;index<count;index++){String term=criteria[index].getText().trim();if(term.contains("&&"))throw new IOException("Enter each search condition in a separate field.");if(!term.isEmpty())terms.add(term);}settings.search=String.join("&&",terms);}
-        try{searchDelay.commitEdit();}catch(java.text.ParseException invalid){throw new IOException("Enter a valid Search wait between 1000 and 10000 milliseconds.");}
-        settings.searchDelayMs=((Number)searchDelay.getValue()).intValue();settings.description=description.getText();settings.approvalDescription=approvalDescription.getText();settings.rejectionDescription=rejectionDescription.getText();settings.rows.clear();
+        settings.description=description.getText();settings.approvalDescription=approvalDescription.getText();settings.rejectionDescription=rejectionDescription.getText();settings.rows.clear();
         for(int r=0;r<tableModel.getRowCount();r++) {
             String[] row=new String[tableModel.getColumnCount()];
             for(int c=0;c<row.length;c++){Object cell=tableModel.getValueAt(r,c);row[c]=cell==null?"":cell.toString();if(c<row.length-1)row[c]=row[c].trim();}

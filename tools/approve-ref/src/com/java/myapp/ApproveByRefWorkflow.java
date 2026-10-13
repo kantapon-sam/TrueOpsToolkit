@@ -131,6 +131,7 @@ public final class ApproveByRefWorkflow {
             result.status = "failed";
             result.message = "Approve by Ref stopped. " + result.counts()
                     + " Review the log and pending requests before retrying.";
+            if (failure instanceof PromsApprovalSupport.SubmissionException) result.message += " " + failure.getMessage();
             reporter.finish(result);
             throw new IOException(result.message, failure);
         }

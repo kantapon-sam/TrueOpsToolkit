@@ -125,7 +125,7 @@ try {
     foreach ($module in $modules) {
         Test-NestedJar $archive ('modules/' + $module.Id + '/' + $module.Jar)
         $settings = Read-Entry $archive ($prefix + 'modules/' + $module.Id + '/settings.csv')
-        $expectedSettings = if ($module.Id -eq 'tk07') { "Search,TK07`r`nDescription_Approve,`r`nDescription_Reject,`r`nSearchDelayMs,2000`r`n" } elseif ($module.Id -eq 'delete') { "Search,`r`nDescription,`r`n" } else { "Search,`r`nDescription,`r`nSearchDelayMs,2000`r`n" }
+        $expectedSettings = if ($module.Id -eq 'tk07') { "Search,TK07`r`nDescription_Approve,`r`nDescription_Reject,`r`n" } elseif ($module.Id -eq 'delete') { "Search,`r`nDescription,`r`n" } else { "Search,`r`nDescription,`r`n" }
         if ($settings -cne $expectedSettings) { throw 'Release preferences must contain only fresh, non-secret fields.' }
         if ($module.Id -in @('approve-ref', 'delete')) {
             if ($archive.GetEntry($prefix + 'modules/' + $module.Id + '/Ref_No.csv').Length -ne 0) { throw 'Release reference list is not empty.' }

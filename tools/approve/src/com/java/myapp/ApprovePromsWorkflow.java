@@ -84,17 +84,21 @@ public final class ApprovePromsWorkflow {
                     support.selectExactReference(reference);
                     new WebDriverWait(driver, timeoutSeconds).until(ExpectedConditions.elementToBeClickable(APPROVE)).click();
                     support.verifyOnlySelectedReference(reference);
-                    submitted = true;
                     support.submitAndConfirm(description);
+                    submitted = true;
                     support.verifyNoLongerPending(pendingUrl, reference);
                     result.approved++;
                     System.out.println("Confirmed approval: " + reference);
                     publish(result, null);
                 } catch (Exception ex) {
                     result.failed++;
+                    if (ex instanceof PromsApprovalSupport.SubmissionException) {
+                        submitted = ((PromsApprovalSupport.SubmissionException) ex).isSubmissionAttempted();
+                    }
                     String advice = submitted
                             ? "The approval outcome for " + reference + " is unconfirmed. Check this reference in PROMS before retrying; no automatic retry was made."
-                            : "The approval stopped at " + reference + " before a confirmed submission. Check the PROMS page and the log.";
+                            : "The approval stopped at " + reference + ". No approval confirmation was sent.";
+                    if (ex instanceof PromsApprovalSupport.SubmissionException) advice += " " + ex.getMessage();
                     publish(result, advice);
                     throw new IOException(result.summary, ex);
                 }

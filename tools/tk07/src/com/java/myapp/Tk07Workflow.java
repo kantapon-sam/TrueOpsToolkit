@@ -113,7 +113,7 @@ public final class Tk07Workflow {
         } catch (Exception failure) {
             result.scanned = Math.max(result.scanned, support.getScannedCount());
             result.failed++;
-            publish(result, "TK07 review stopped. Check the affected request before retrying; no automatic resubmission was made.");
+            publish(result, "TK07 review stopped. " + (failure instanceof PromsApprovalSupport.SubmissionException ? failure.getMessage() : "Check the affected request before retrying; no automatic resubmission was made."));
             throw new IOException(result.summary, failure);
         }
     }

@@ -10,7 +10,6 @@ final class ModuleSettings {
     final ModuleSpec module;
     final Path directory;
     String search="", description="", approvalDescription="", rejectionDescription="";
-    int searchDelayMs=2000;
     final List<String[]> rows=new ArrayList<String[]>();
     private final List<String> extraLines=new ArrayList<String>();
     private byte[] originalLogin,originalReferences;
@@ -33,7 +32,7 @@ final class ModuleSettings {
             }
             loadedRows.add(cells);
         }
-        search=module==ModuleSpec.TK07?"TK07":"";description="";approvalDescription="";rejectionDescription="";searchDelayMs=2000;extraLines.clear();
+        search=module==ModuleSpec.TK07?"TK07":"";description="";approvalDescription="";rejectionDescription="";extraLines.clear();
         for(String line:loginText.split("\\r?\\n",-1)) {
             if(line.isEmpty())continue;
             String[] pair=line.split(",",2);
@@ -41,7 +40,7 @@ final class ModuleSettings {
             if(SharedCredentialsMigration.isCredentialKey(key))continue;
             else if("Search".equals(key))search=value;
             else if("Description".equals(key))description=value;
-            else if("SearchDelayMs".equals(key)){try{searchDelayMs=Integer.parseInt(value.trim());}catch(NumberFormatException invalid){throw new IOException("Search wait must be a whole number of milliseconds between 1000 and 10000.");}}
+            else if("SearchDelayMs".equalsIgnoreCase(key))continue; // Obsolete preference; readiness is automatic.
             else if(module==ModuleSpec.TK07 && "Description_Approve".equals(key))approvalDescription=value;
             else if(module==ModuleSpec.TK07 && "Description_Reject".equals(key))rejectionDescription=value;
             else extraLines.add(line);
@@ -56,7 +55,6 @@ final class ModuleSettings {
     void validate(boolean forRun) throws IOException {
         singleLine(search,"Search");singleLine(description,"Description");
         singleLine(approvalDescription,"Approval comment");singleLine(rejectionDescription,"Rejection comment");
-        if(searchDelayMs<1000 || searchDelayMs>10000)throw new IOException("Search wait must be between 1000 and 10000 milliseconds.");
         if(forRun && (module==ModuleSpec.APPROVE || module==ModuleSpec.TK07)) {
             if(search.trim().isEmpty())throw new IOException("Enter search criteria to identify the records to approve before starting.");
             String[] terms=search.split("&&",-1);
@@ -89,7 +87,6 @@ final class ModuleSettings {
             if(!search.isEmpty())content.append("Search,").append(search).append("\r\n");
             if(!description.isEmpty())content.append("Description,").append(description).append("\r\n");
         }
-        if(module!=ModuleSpec.DELETE)content.append("SearchDelayMs,").append(searchDelayMs).append("\r\n");
         for(String line:extraLines)content.append(line).append("\r\n");
         byte[] newLogin=content.toString().getBytes(StandardCharsets.UTF_8);
         StringBuilder refs=new StringBuilder();

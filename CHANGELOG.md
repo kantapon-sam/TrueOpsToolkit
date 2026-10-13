@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1 — 2026-10-13
+
+- Fix approval stopping before confirmation because the comment button's checkmark was mistaken for an earlier success response.
+- Recognize the PROMS success dialog separately and handle its response while the original comment dialog remains open. Preserve exact-reference pending verification and never retry an uncertain submission automatically.
+- Report whether confirmation was attempted and the stage where the run stopped. Apply the shared fix to Approve PROMS, Approve by Ref, and TK07 Review.
+- Remove the Search wait control and fixed minimum delay. Wait for document readiness, initial pending data, and the current search response automatically. Ignore legacy delay settings and remove them on the next save.
+- Add synthetic browser regressions based on observed PROMS markup, including checkmark confirmation buttons, stacked responses, ambiguous or stale dialogs, and slow search results. Production inspection remains read-only.
+
 ## 1.1.0 — 2026-10-13
 
 - Add TK07 Review with shared encrypted login and ChromeDriver, editable Search and approval/rejection comments, and isolated PDF downloads.

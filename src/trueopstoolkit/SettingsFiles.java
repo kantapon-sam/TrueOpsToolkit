@@ -60,7 +60,7 @@ final class SettingsFiles {
         for(String raw:text(bytes).split("\\r?\\n",-1)) {
             String line=raw.trim();if(line.isEmpty())continue;
             String[] pair=line.split(",",2);
-            if(pair.length==2){String key=pair[0].trim(),value=pair[1].trim();if(("Search".equalsIgnoreCase(key) || "Description".equalsIgnoreCase(key) || "Description_Approve".equalsIgnoreCase(key) || "Description_Reject".equalsIgnoreCase(key)) && value.isEmpty())continue;if("SearchDelayMs".equalsIgnoreCase(key) && "2000".equals(value))continue;}
+            if(pair.length==2){String key=pair[0].trim(),value=pair[1].trim();if(("Search".equalsIgnoreCase(key) || "Description".equalsIgnoreCase(key) || "Description_Approve".equalsIgnoreCase(key) || "Description_Reject".equalsIgnoreCase(key)) && value.isEmpty())continue;if("SearchDelayMs".equalsIgnoreCase(key))continue;}
             return true;
         }
         return false;

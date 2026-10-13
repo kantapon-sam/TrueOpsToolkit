@@ -45,8 +45,19 @@ public final class ApproveWorkflowTest {
         try {
             driver = new ChromeDriver(options);
             driver.manage().timeouts().pageLoadTimeout(20, TimeUnit.SECONDS);
+            if (args.length > 3 && "--confirmation-only".equals(args[3])) {
+                noPagerAndExactReference();
+                responseIdentityAndLifecycle();
+                ambiguousFormsFailBeforeConfirmation();
+                ambiguousAcknowledgementFailsWithoutRetry();
+                missingConfirmationFails();
+                serverFailureIsNotSuccess();
+                successWithoutPendingRemovalFails();
+                report.append("Checks: ").append(checks).append("\nResult: PASS\n");
+                return;
+            }
             readOnlyPreview();
-            searchDelayIsCapturedAndValidated();
+            obsoleteDelayDoesNotControlReadiness();
             slowFilterReadsFreshRows();
             slowPendingAbsenceCheckWaitsForFreshRows();
             unchangedRowsStillHaveConfirmedFilterResponse();
@@ -55,6 +66,7 @@ public final class ApproveWorkflowTest {
             fourCriteriaRequireEveryMatch();
             delayedPagingAndMatching();
             noPagerAndExactReference();
+            responseIdentityAndLifecycle();
             exactReferenceOnLaterFilteredPage();
             laterPagePendingReferenceIsNotSuccess();
             zeroPendingAndNoMatches();
@@ -124,28 +136,17 @@ public final class ApproveWorkflowTest {
         }
     }
 
-    private static void searchDelayIsCapturedAndValidated() throws Exception {
+    private static void obsoleteDelayDoesNotControlReadiness() throws Exception {
         String previous = System.getProperty("trueops.search.delay.ms");
         try (MockPromsPortal portal = portal(Arrays.asList(row("REF-DELAY", "TK09", "ATTS")), "normal", 10, false)) {
-            System.clearProperty("trueops.search.delay.ms");
-            PromsApprovalSupport existing = new PromsApprovalSupport(driver, 8);
-            System.setProperty("trueops.search.delay.ms", "1000");
-            long started = System.nanoTime();
-            equal(1, existing.collect("tk09", message -> { }).size(), "Existing run still captures its default delay");
-            equal(true, (System.nanoTime() - started) / 1000000L >= 1900, "Existing run retains2000ms delay after property change");
-            PromsApprovalSupport fresh = new PromsApprovalSupport(driver, 8);
-            started = System.nanoTime();
-            equal(1, fresh.collect("tk09", message -> { }).size(), "New run accepts1000ms override");
-            equal(true, (System.nanoTime() - started) / 1000000L >= 950, "New override still enforces minimum delay");
-            for (String value : new String[] {"999", "10001", "-1", "not-an-integer", ""}) {
+            for (String value : new String[] {"10000", "not-an-integer"}) {
                 System.setProperty("trueops.search.delay.ms", value);
-                try {
-                    new PromsApprovalSupport(driver, 8);
-                    throw new AssertionError("Invalid Search delay must not start a workflow.");
-                } catch (IllegalArgumentException expected) { checks++; }
+                long started = System.nanoTime();
+                equal(1, new PromsApprovalSupport(driver, 8).collect("tk09", message -> { }).size(), "Old delay does not block automatic readiness");
+                equal(true, (System.nanoTime() - started) / 1000000L < 8000, "Ready page does not wait for obsolete ten-second delay");
             }
-            equal(0, portal.attempts().size(), "Delay validation/read-only checks never submit approvals");
-            report.append("PASS: default2000ms Search delay is captured per run; new1000ms override applies; malformed/out-of-range values stop before work\n");
+            equal(0, portal.attempts().size(), "Readiness checks never submit approvals");
+            report.append("PASS: legacy delay is ignored; page/result completion determines readiness\n");
         } finally {
             if (previous == null) System.clearProperty("trueops.search.delay.ms");
             else System.setProperty("trueops.search.delay.ms", previous);
@@ -337,9 +338,10 @@ public final class ApproveWorkflowTest {
     }
 
     private static void ambiguousFormsFailBeforeConfirmation() throws Exception {
-        for (String mode : new String[] {"ambiguous-form", "ambiguous-comment", "ambiguous-confirm"}) {
+        for (String mode : new String[] {"ambiguous-form", "ambiguous-comment", "ambiguous-confirm", "stale-response"}) {
             try (MockPromsPortal portal = portal(Arrays.asList(row("REF-1", "TK09", "ATTS")), mode, 10, false)) {
-                expectFailure(portal, 3, "Ambiguous visible approval controls must fail closed: " + mode);
+                IOException failure = expectFailure(portal, 3, "Ambiguous visible approval controls must fail closed: " + mode);
+                contains(failure.getMessage(), "No approval confirmation was sent", "Pre-submission errors are explicit");
                 equal(0, portal.attempts().size(), "Ambiguous form sends no confirmation request: " + mode);
                 equal(0, portal.approvals().size(), "Ambiguous form has no server approval: " + mode);
                 equal(0L, number("return window.fixture.confirmationClicks"), "Ambiguous form never clicks paOkModal: " + mode);
@@ -359,6 +361,24 @@ public final class ApproveWorkflowTest {
             contains(System.getProperty("trueops.approve.result", ""), "failed=1", "Unconfirmed outcome reports failure");
             report.append("PASS: multiple visible success dialogs report an unconfirmed outcome without retry or arbitrary dismissal\n");
         }
+    }
+
+    private static void responseIdentityAndLifecycle() throws Exception {
+        try (MockPromsPortal portal = portal(Arrays.asList(row("REF-LIFECYCLE", "TK09", "ATTS")), "replaced-comment", 10, false)) {
+            equal(1, ApprovePromsWorkflow.run(driver, portal.url(), "tk09", DESCRIPTION, 8).getApproved(), "Success also works after comment modal replacement");
+            equal(1L, number("return window.fixture.confirmationClicks"), "Confirmation with checkmark clicked once");
+            equal(1L, number("return window.fixture.successClicks"), "Success callback clicked once");
+        }
+        for (String mode : new String[] {"generic-checkmark", "duplicate-response-button"}) {
+            try (MockPromsPortal portal = portal(Arrays.asList(row("REF-IDENTITY", "TK09", "ATTS")), mode, 10, false)) {
+                IOException failure = expectFailure(portal, 3, "Unverified response is not accepted");
+                contains(failure.getMessage(), "waiting for the PROMS success response", "Failure names response phase");
+                contains(failure.getMessage(), "unconfirmed", "Post-submission errors retain uncertain outcome");
+                equal(1, portal.attempts().size(), "No automatic resubmission");
+                equal(0L, number("return window.fixture.successClicks"), "Unknown or ambiguous acknowledgement never clicked");
+            }
+        }
+        report.append("PASS: observed PROMS checkmark confirmation and stacked/replaced response lifecycle; unknown/duplicate acknowledgements remain unconfirmed\n");
     }
 
     private static void duplicatePageFailsBeforeApproving() throws Exception {

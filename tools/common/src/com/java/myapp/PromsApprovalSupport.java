@@ -27,8 +27,6 @@ public final class PromsApprovalSupport {
     private static final By COMMENT = By.cssSelector("textarea[ng-model='commentDesc']");
     private static final By CONFIRM = By.xpath("//button[contains(@ng-click, 'paOkModal()')]");
     private static final By CONFIRM_IN_DIALOG = By.xpath(".//button[contains(@ng-click, 'paOkModal()')]");
-    private static final By SUCCESS = By.xpath("//i[contains(concat(' ', normalize-space(@class), ' '), ' glyphicon-ok ')]/ancestor::button[1]");
-    private static final By SUCCESS_IN_DIALOG = By.xpath(".//i[contains(concat(' ', normalize-space(@class), ' '), ' glyphicon-ok ')]/ancestor::button[1]");
     private static final By SUCCESS_ICON = By.cssSelector(".swal2-icon.swal2-success");
     private static final By DIALOGS = By.cssSelector(".modal, .modal-content, [role='dialog'], .swal2-popup");
     private static final By ANCESTOR_DIALOGS = By.xpath("ancestor::*[contains(concat(' ',normalize-space(@class),' '),' modal ') or contains(concat(' ',normalize-space(@class),' '),' modal-content ') or @role='dialog' or contains(concat(' ',normalize-space(@class),' '),' swal2-popup ')]");
@@ -37,7 +35,6 @@ public final class PromsApprovalSupport {
     private static final long STABLE_NANOS = TimeUnit.MILLISECONDS.toNanos(500);
     private final WebDriver driver;
     private final WebDriverWait wait;
-    private final long minimumSettleNanos;
     private int scannedCount;
     private long responseGeneration;
 
@@ -48,19 +45,6 @@ public final class PromsApprovalSupport {
         this.driver = driver;
         this.wait = new WebDriverWait(driver, timeoutSeconds);
         this.wait.pollingEvery(100, TimeUnit.MILLISECONDS);
-        this.minimumSettleNanos = TimeUnit.MILLISECONDS.toNanos(searchDelayMillis());
-    }
-
-    private static int searchDelayMillis() {
-        String configured = System.getProperty("trueops.search.delay.ms", "2000").trim();
-        try {
-            if (!configured.matches("[0-9]+")) throw new NumberFormatException("Not an integer");
-            int delay = Integer.parseInt(configured);
-            if (delay < 1000 || delay > 10000) throw new NumberFormatException("Out of range");
-            return delay;
-        } catch (NumberFormatException invalid) {
-            throw new IllegalArgumentException("Search delay must be an integer from 1000 to 10000 milliseconds. Set it in Toolkit settings before running.", invalid);
-        }
     }
 
     /** Search first term on the server, then snapshot every filtered page before changing any request. */
@@ -262,6 +246,8 @@ public final class PromsApprovalSupport {
 
     /** No retry: a lost acknowledgement after paOkModal may already represent a successful server write. */
     public void submitAndConfirm(String description) throws IOException {
+        boolean attempted = false;
+        String phase = "waiting for the approval comment dialog";
         try {
             ApprovalDialog approval = wait.until(d -> {
                 try {
@@ -270,9 +256,7 @@ public final class PromsApprovalSupport {
                     return null;
                 }
             });
-            if (visible(SUCCESS) != null || visible(SUCCESS_ICON) != null) {
-                throw new IOException("An earlier response dialog is still open. Close it in PROMS before retrying.");
-            }
+            phase = "preparing the approval comment";
             approval.comment.clear();
             approval.comment.sendKeys(description == null ? "" : description);
             ApprovalDialog current = approvalDialog();
@@ -280,25 +264,43 @@ public final class PromsApprovalSupport {
                     || !current.comment.equals(approval.comment) || !current.confirm.equals(approval.confirm)) {
                 throw new IOException("The approval dialog changed before submission. No approval was submitted.");
             }
+            phase = "clicking the approval confirmation";
+            // A click transport failure may still reach the server. Never automatically retry it.
+            attempted = true;
             current.confirm.click();
+            phase = "waiting for the PROMS success response";
             WebElement acknowledgement = wait.until(d -> {
                 try {
                     checkErrors();
-                    if (visible(BUSY) != null || visible(COMMENT) != null) {
+                    if (visible(BUSY) != null) {
                         return null;
                     }
-                    return acknowledgement();
+                    return acknowledgement(approval.container);
                 } catch (StaleElementReferenceException ex) {
                     // The server response replaces the comment modal asynchronously; only reread, never resubmit.
                     return null;
                 }
             });
+            phase = "closing the PROMS success response";
             acknowledgement.click();
-        } catch (IOException ex) {
-            throw ex;
+            wait.until(d -> visibleElements(driver, COMMENT).isEmpty()
+                    && visibleElements(driver, By.cssSelector("#success_s_modal, .swal2-popup")).isEmpty());
         } catch (Exception ex) {
-            throw new IOException("PROMS did not provide a confirmed approval response. Check the reference in PROMS before retrying; no automatic retry was made.", ex);
+            System.err.println("PROMS approval stopped while " + phase + "; confirmation attempted="
+                    + attempted + "; cause=" + ex.getClass().getSimpleName());
+            throw new SubmissionException(phase, attempted, ex);
         }
+    }
+
+    public static final class SubmissionException extends IOException {
+        private final boolean attempted;
+        private SubmissionException(String phase, boolean attempted, Exception cause) {
+            super("Stopped while " + phase + ". " + (attempted
+                    ? "The outcome is unconfirmed. Check PROMS before retrying; no automatic retry was made."
+                    : "No approval confirmation was sent."), cause);
+            this.attempted = attempted;
+        }
+        public boolean isSubmissionAttempted() { return attempted; }
     }
 
     /** Bind both input and action to one logical modal, allowing nested Bootstrap modal-content. */
@@ -333,24 +335,26 @@ public final class PromsApprovalSupport {
         return new ApprovalDialog(container, comments.get(0), confirms.get(0));
     }
 
-    private WebElement acknowledgement() {
-        List<WebElement> buttons = visibleElements(driver, SUCCESS);
-        List<WebElement> icons = visibleElements(driver, SUCCESS_ICON);
-        if (buttons.isEmpty() && icons.isEmpty()) {
-            return null;
-        }
-        WebElement container = singleVisibleDialog();
-        if (container == null || buttons.size() > 1 || icons.size() > 1) {
+    private WebElement acknowledgement(WebElement originalCommentDialog) {
+        List<WebElement> dialogs = visibleDialogs();
+        // PROMS leaves pa_comment_modal open until the success_s_modal OK callback runs.
+        // Exclude only the original verified comment container, never an arbitrary second dialog.
+        dialogs.remove(originalCommentDialog);
+        if (dialogs.isEmpty()) return null;
+        if (dialogs.size() != 1) {
             throw new IllegalStateException("The approval response is ambiguous. Check PROMS before retrying.");
         }
-        if (!buttons.isEmpty()) {
-            List<WebElement> scoped = visibleElements(container, SUCCESS_IN_DIALOG);
-            if (scoped.size() != 1 || !scoped.get(0).equals(buttons.get(0))) {
-                throw new IllegalStateException("The success acknowledgement is outside the response dialog.");
-            }
+        WebElement container = dialogs.get(0);
+        if (!visibleElements(container, COMMENT).isEmpty() || !visibleElements(container, CONFIRM_IN_DIALOG).isEmpty()) {
+            throw new IllegalStateException("An unexpected approval form appeared instead of a response.");
+        }
+        if ("success_s_modal".equals(container.getAttribute("id"))) {
+            List<WebElement> buttons = visibleElements(container, By.cssSelector("button.ok"));
+            if (buttons.size() != 1) throw new IllegalStateException("The success response has no unique OK button.");
             return buttons.get(0).isEnabled() ? buttons.get(0) : null;
         }
         List<WebElement> scopedIcons = visibleElements(container, SUCCESS_ICON);
+        if (scopedIcons.isEmpty()) return null; // A generic checkmark is not a server success response.
         List<WebElement> confirms = visibleElements(container, By.cssSelector("button.swal2-confirm"));
         if (scopedIcons.size() != 1 || confirms.size() != 1) {
             throw new IllegalStateException("The success response has no unique acknowledgement button.");
@@ -359,6 +363,14 @@ public final class PromsApprovalSupport {
     }
 
     private WebElement singleVisibleDialog() {
+        List<WebElement> outermost = visibleDialogs();
+        if (outermost.size() > 1) {
+            throw new IllegalStateException("Multiple visible approval or response dialogs are present. Check PROMS before retrying.");
+        }
+        return outermost.isEmpty() ? null : outermost.get(0);
+    }
+
+    private List<WebElement> visibleDialogs() {
         List<WebElement> visible = visibleElements(driver, DIALOGS);
         List<WebElement> outermost = new ArrayList<>();
         for (WebElement dialog : visible) {
@@ -373,10 +385,7 @@ public final class PromsApprovalSupport {
                 outermost.add(dialog);
             }
         }
-        if (outermost.size() > 1) {
-            throw new IllegalStateException("Multiple visible approval or response dialogs are present. Check PROMS before retrying.");
-        }
-        return outermost.isEmpty() ? null : outermost.get(0);
+        return outermost;
     }
 
     private static List<WebElement> visibleElements(org.openqa.selenium.SearchContext context, By selector) {
@@ -445,6 +454,7 @@ public final class PromsApprovalSupport {
             // Let the existing pending load settle before any clear/type response can be observed as this filter.
             wait.until(d -> PromsPageActivity.idle(driver, bootstrapGeneration));
             settledRows(null, false);
+            input = wait.until(ExpectedConditions.elementToBeClickable(SEARCH));
             responseGeneration = PromsPageActivity.begin(driver, value);
             input.clear();
             input.sendKeys(value);
@@ -501,7 +511,7 @@ public final class PromsApprovalSupport {
                     last[0] = candidate.signature;
                     stableSince[0] = now;
                 }
-                if (now - started < minimumSettleNanos || now - stableSince[0] < STABLE_NANOS) {
+                if (now - stableSince[0] < STABLE_NANOS) {
                     return null;
                 }
                 return candidate;

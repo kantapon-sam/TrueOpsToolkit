@@ -28,12 +28,13 @@ public final class ModuleWindowSearchTest {
                     for(String name:names)set(frame,name,"");set(frame,names[3]," TK09 ");collect(frame);settings.validate(true);check("TK09".equals(settings.search),"Any one filled field satisfies minimum-one rule");
                     set(frame,names[3],"");collect(frame);try{settings.validate(true);throw new AssertionError("Empty conditions accepted");}catch(IOException expected){checks++;}
                     set(frame,names[0],"TK08&&ATTS");try{collect(frame);throw new AssertionError("Joined conditions accepted in one field");}catch(InvocationTargetException expected){check(expected.getCause() instanceof IOException,"Joined text requests separate fields");}
-                    set(frame,names[0],"TK08");((JSpinner)field("searchDelay").get(frame)).setValue(3500);collect(frame);settings.validate(true);check(settings.searchDelayMs==3500,"Search wait is editable from the GUI");
+                    set(frame,names[0],"TK08");collect(frame);settings.validate(true);check(!containsSpinner(frame),"No manual delay control remains in the GUI");
                 }catch(Exception failure){throw new RuntimeException(failure);}
             });
         }finally {SwingUtilities.invokeAndWait(()->{if(window[0]!=null)window[0].dispose();});ToolkitUpdater.deleteTree(home);}
-        System.out.println("PASS: four-condition GUI and legacy settings ("+checks+" checks); at least one filled field and editable search delay.");
+        System.out.println("PASS: four-condition GUI and legacy settings ("+checks+" checks); at least one filled field and automatic page readiness.");
     }
+    private static boolean containsSpinner(java.awt.Component component){if(component instanceof JSpinner)return true;if(component instanceof java.awt.Container)for(java.awt.Component child:((java.awt.Container)component).getComponents())if(containsSpinner(child))return true;return false;}
     private static Field field(String name)throws Exception{Field field=ModuleWindow.class.getDeclaredField(name);field.setAccessible(true);return field;}
     private static String text(ModuleWindow frame,String name)throws Exception{return ((JTextField)field(name).get(frame)).getText();}
     private static void set(ModuleWindow frame,String name,String text)throws Exception{((JTextField)field(name).get(frame)).setText(text);}

@@ -30,6 +30,14 @@ public final class Tk07WorkflowTest {
 
     public static void main(String[] args) throws Exception {
         reports = Files.createDirectories(Paths.get("build/test-reports/tk07").toAbsolutePath());
+        if (args.length > 2 && "--confirmation-only".equals(args[2])) {
+            System.setProperty("webdriver.chrome.driver", Paths.get(args[0]).toAbsolutePath().toString());
+            fixture = Paths.get(args[1]).toAbsolutePath();
+            normalReview();
+            unconfirmedDecisions();
+            System.out.println("PASS: " + assertions + " TK07 confirmation checks; only synthetic localhost was used.");
+            return;
+        }
         if (args.length > 2 && "--actual-activity-only".equals(args[2])) {
             System.setProperty("webdriver.chrome.driver", Paths.get(args[0]).toAbsolutePath().toString());
             fixture = Paths.get(args[1]).toAbsolutePath();

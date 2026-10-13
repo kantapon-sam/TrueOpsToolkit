@@ -144,7 +144,7 @@ foreach ($module in $modules) {
     }
     $directory = Join-Path $script:stageRoot ('modules\' + $module.Id)
     # Fresh non-secret preferences only. Account fields are never written here.
-    $blankPreferences = if ($module.Id -eq 'tk07') { "Search,TK07`r`nDescription_Approve,`r`nDescription_Reject,`r`nSearchDelayMs,2000`r`n" } elseif ($module.Id -eq 'delete') { "Search,`r`nDescription,`r`n" } else { "Search,`r`nDescription,`r`nSearchDelayMs,2000`r`n" }
+    $blankPreferences = if ($module.Id -eq 'tk07') { "Search,TK07`r`nDescription_Approve,`r`nDescription_Reject,`r`n" } elseif ($module.Id -eq 'delete') { "Search,`r`nDescription,`r`n" } else { "Search,`r`nDescription,`r`n" }
     Write-Utf8 (Join-Path $directory 'settings.csv') $blankPreferences
     $script:allowed.Add('modules/' + $module.Id + '/settings.csv')
     if ($module.Id -in @('approve-ref', 'delete')) {

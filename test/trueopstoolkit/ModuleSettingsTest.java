@@ -37,8 +37,11 @@ public final class ModuleSettingsTest {
             }
             ModuleSettings approve=new ModuleSettings(home,ModuleSpec.APPROVE);approve.load();
             for(String invalid:new String[]{""," ","x&&","&&y","x&&y&&z&&d&&e"}){approve.search=invalid;expectFailure(() -> approve.validate(true));}
-            approve.search="TK08&&ATTS&&PAC&&TRUE";approve.searchDelayMs=3000;approve.validate(true);approve.save();approve.load();check("TK08&&ATTS&&PAC&&TRUE".equals(approve.search) && approve.searchDelayMs==3000,"Four AND conditions and adjustable search wait survive save/reload");
-            approve.searchDelayMs=0;expectFailure(()->approve.save());approve.load();
+            approve.search="TK08&&ATTS&&PAC&&TRUE";approve.validate(true);approve.save();approve.load();check("TK08&&ATTS&&PAC&&TRUE".equals(approve.search),"Four AND conditions survive save/reload");
+            Path approveFile=approve.directory.resolve("settings.csv");
+            Files.write(approveFile,"SearchDelayMs,not-a-number\n".getBytes(StandardCharsets.UTF_8),StandardOpenOption.APPEND);
+            approve.load();approve.validate(true);approve.save();
+            check(!new String(Files.readAllBytes(approveFile),StandardCharsets.UTF_8).contains("SearchDelayMs"),"Obsolete delay is ignored and removed on save without losing conditions");
             ModuleSettings deletion=new ModuleSettings(home,ModuleSpec.DELETE);deletion.load();deletion.rows.clear();expectFailure(() -> deletion.validate(true));
             deletion.rows.add(new String[]{"REF-1",""});expectFailure(() -> deletion.save());
             Path ref=ModuleSpec.REF.directory(home).resolve("Ref_No.csv");Files.write(ref,"\uFEFFREF-2,Services,ไทย,มีจุลภาค\r\n\r\n".getBytes(StandardCharsets.UTF_8));
@@ -62,7 +65,7 @@ public final class ModuleSettingsTest {
         Files.write(overlay.resolve("Login.txt"),legacy);
         Files.write(overlay.resolve("settings.csv"),"\uFEFFSearch,\r\nDescription,  \r\nSearchDelayMs,2000\r\n".getBytes(StandardCharsets.UTF_8));
         check(Arrays.equals(legacy,Files.readAllBytes(SettingsFiles.resolve(overlay))) && !Files.exists(overlay.resolve("Login.txt")),"an empty release template preserves meaningful legacy preferences");
-        Path customDelay=cases.resolve("custom-delay");Files.createDirectories(customDelay);byte[] waitOnly="Search,\nDescription,\nSearchDelayMs,3500\n".getBytes(StandardCharsets.UTF_8);Files.write(customDelay.resolve("settings.csv"),waitOnly);Files.write(customDelay.resolve("Login.txt"),legacy);SettingsFiles.resolve(customDelay);check(Arrays.equals(waitOnly,Files.readAllBytes(customDelay.resolve("settings.csv"))) && Arrays.equals(legacy,Files.readAllBytes(customDelay.resolve("settings-legacy.csv"))),"a customized wait remains authoritative while legacy preferences are preserved separately");
+        Path customDelay=cases.resolve("custom-delay");Files.createDirectories(customDelay);byte[] waitOnly="Search,\nDescription,\nSearchDelayMs,3500\n".getBytes(StandardCharsets.UTF_8);Files.write(customDelay.resolve("settings.csv"),waitOnly);Files.write(customDelay.resolve("Login.txt"),legacy);SettingsFiles.resolve(customDelay);check(Arrays.equals(legacy,Files.readAllBytes(customDelay.resolve("settings.csv"))),"an obsolete delay alone does not hide meaningful legacy preferences");
         Path conflict=cases.resolve("conflict");Files.createDirectories(conflict);
         byte[] current="Search,current\r\nDescription,new,comma\r\n".getBytes(StandardCharsets.UTF_8),existing="Search,existing-backup\n".getBytes(StandardCharsets.UTF_8);
         Files.write(conflict.resolve("Login.txt"),legacy);Files.write(conflict.resolve("settings.csv"),current);Files.write(conflict.resolve("settings-legacy.csv"),existing);
