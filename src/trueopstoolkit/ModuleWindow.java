@@ -55,7 +55,7 @@ final class ModuleWindow extends JFrame {
             addRow(form,row++,"",Ui.note("Fill at least one condition. Every filled condition must match; letter case is ignored.\nTK codes (e.g. TK09) match Request Type only. Enter one term per field."));
         }
         if(module!=ModuleSpec.DELETE)addRow(form,row++,"",Ui.note("The tool waits for the page and each search result to finish loading automatically."));
-        addRow(form,row++,"",Ui.note("Your shared username and password are encrypted by Windows.\nSign in is automatic. Complete CAPTCHA if the selected portal requests it."));
+        addRow(form,row++,"",Ui.note("Your shared username and password are saved without encryption.\nSign in is automatic. Complete CAPTCHA if the selected portal requests it."));
         GridBagConstraints spacer=new GridBagConstraints();spacer.gridy=row;spacer.weighty=1;form.add(new JPanel(),spacer);
         tabs.addTab("Login / Settings",new JScrollPane(form));
         String[] columns=module==ModuleSpec.REF?new String[]{"Ref No.","Type","Description"}:new String[]{"Ref No.","Deletion reason"};

@@ -1,12 +1,12 @@
 # TrueOps Toolkit
 
-A Windows desktop launcher for four PROMS tools, with one encrypted shared account and one active tool at a time.
+A Windows desktop launcher for four PROMS tools, with one shared account saved without encryption and one active tool at a time.
 
-**Current version: 1.1.2** · [Download the latest release](https://github.com/kantapon-sam/TrueOpsToolkit/releases/latest) · [Changelog](CHANGELOG.md)
+**Current version: 1.1.3** · [Download the latest release](https://github.com/kantapon-sam/TrueOpsToolkit/releases/latest) · [Changelog](CHANGELOG.md)
 
 ## Get started
 
-1. Download `TrueOpsToolkit-1.1.2-windows.zip` from Releases and extract the complete folder.
+1. Download `TrueOpsToolkit-1.1.3-windows.zip` from Releases and extract the complete folder.
 2. Open `TrueOpsToolkit.jar` directly. Windows, Java 8 or later, Windows PowerShell, and Google Chrome are required. If JAR files are not associated with Java, run `java -jar TrueOpsToolkit.jar` from the extracted folder.
 3. Select **Shared account**, enter your username and password, and save. All four tools use this account. A saved password appears as dots; select **Show password** to view it, or replace it to update. Cancel leaves the saved account unchanged.
 4. Select **Portal settings** and choose External or Internal. Connect to the company network or VPN before using Internal.
@@ -25,11 +25,13 @@ The release ZIP contains no ChromeDriver binary, `.exe`, `.bat`, or `.cmd` files
 
 ## Accounts and settings
 
-The username and password are encrypted together using **Windows DPAPI CurrentUser** in `config/credentials.dat`. There is no separate key file, and account values are excluded from `settings.csv` and individual tool settings. Decryption requires the Windows account that saved the credentials, normally on the same computer. Programs running under that Windows account can also decrypt them. Each recipient of a distributed release should configure their own account in the application.
+The username and password are saved **without encryption** as UTF-8 text in `config/credentials.properties`. Anyone who can read that file can read the account. Keep your personal installation private and distribute only the release ZIP, which excludes account files. Account storage does not call DPAPI or launch PowerShell. Account values remain excluded from module `settings.csv` files and logs. Each recipient configures their own account in the application.
+
+**Upgrade from 1.1.2 or earlier:** On the first normal startup after updating, the Toolkit deletes its old `config/credentials.dat` without reading or decrypting it, clears stale account fields from its module preferences, and asks you to enter the shared account again. It does not convert the old password. Existing plaintext shared accounts, portal settings, task preferences, and reference files are preserved. Subsequent updates retain `credentials.properties`.
 
 Edit the account from the launcher or the **Shared account settings** button in a tool. Every tool uses the latest saved account. The saved password loads as dots; **Show password** reveals the saved or newly typed value. Keep the loaded value to retain it, or replace it and save. Empty passwords are rejected. Cancel leaves the saved account unchanged, and closing the dialog resets password visibility. If the account file cannot be read, the tool stops before signing in and asks you to configure the shared account again.
 
-If the Toolkit has no saved shared account, it checks legacy account files inside its module folders in this order: Approve PROMS, Approve by Ref, Delete Site, and TK07 Review. It verifies that the encrypted account can be read back before removing the old account fields. An existing shared account is retained. Original standalone project folders are not imported or modified automatically.
+If there is no shared account and no old encrypted account, the Toolkit can import older plaintext account fields from its own module folders in this order: Approve PROMS, Approve by Ref, Delete Site, and TK07 Review. It verifies the new shared file before removing those account fields. Existing shared accounts remain authoritative. Original standalone project folders are not imported or modified automatically.
 
 Each PROMS tool keeps its task preferences in `settings.csv`. TK07 Review stores `Search`, `Description_Approve`, and `Description_Reject`. Obsolete `SearchDelayMs` preferences are ignored and removed when settings are saved. Legacy `Login.txt` files inside a Toolkit module are renamed or retained as a legacy preferences backup on first use; existing current preferences remain authoritative. The settings file contains no account credentials.
 
@@ -57,11 +59,11 @@ Multiple RFS attachments, non-PDF RFS files, unreadable or image-only PDFs, and 
 
 **Installation progress and reopen:** After the Toolkit closes, the installer displays its status while waiting for application files, verifying the update, and installing the new version. It keeps a backup so it can restore the previous application files if installation fails. After a successful installation, it automatically opens the updated Toolkit.
 
-**Toolkit application:** The launcher downloads newer releases from GitHub and verifies SHA256 against the release descriptor. Installation runs after the Toolkit closes and no module is active. The updater preserves the encrypted account, settings, Excel workbooks, CSV files, attachments, ChromeDriver, and logs. **Check for updates** remains available for an additional manual check. The installed version remains usable if the network is unavailable.
+**Toolkit application:** The launcher downloads newer releases from GitHub and verifies SHA256 against the release descriptor. Installation runs after the Toolkit closes and no module is active. The updater preserves the plaintext shared account, settings, Excel workbooks, CSV files, attachments, ChromeDriver, and logs. Old encrypted accounts are cleared by the updated application at startup, after successful installation; failed installation retains them for rollback. **Check for updates** remains available for an additional manual check. The installed version remains usable if the network is unavailable.
 
 **ChromeDriver:** All four tools use the same `drivers/chromedriver.exe`. The Toolkit automatically checks the installed Chrome version and downloads the latest compatible driver from Google at startup and before opening Chrome. If the network is unavailable, an existing driver is used only if it is compatible, and the status is displayed. **Update ChromeDriver** remains available for an additional check while no task is open. The **Update / test Chrome** button in a PROMS tool also opens a local test page.
 
-**Upgrading older installations:** Installations already on 1.0.2 use the visible installer and automatically reopen after updating to 1.1.1. The updater installed in 1.0.1 retains its earlier installation behavior for the first upgrade; open the Toolkit once after it finishes. Version 1.0.0 requires the retired TUAR files during update validation, so moving to this four-tool release requires one manual upgrade. Extract the new release into a separate folder, then copy your `config/credentials.dat`, `config/portal.properties` if present, each module's `settings.csv`, `Ref_No.csv`, and other personal task data into matching locations before opening it. If an old module has only `Login.txt`, copy its preferences as `settings.csv` over the new release's blank template. Keep the newly extracted application JARs and libraries. The encrypted account remains usable under the Windows account and computer where it was saved.
+**Upgrading older installations:** Installations on 1.0.2 through 1.1.2 use the visible installer and automatically reopen after updating to 1.1.3. Open Shared account and enter the account again when the old encrypted file is cleared. The updater in 1.0.1 needs one manual reopen after its first upgrade. Version 1.0.0 requires one manual application upgrade: extract the new release separately, then copy your saved portal mode, module preferences, reference files, and other personal task data into matching locations. Do not copy the old encrypted account; configure the account in the new installation. If an old module has only `Login.txt`, copy its preferences as `settings.csv` over the release template. Keep the new application JARs and libraries.
 
 ## Local data
 
@@ -69,7 +71,7 @@ When built from source, runtime files are in `dist`. In a release, they are in t
 
 | Location | Contents |
 |---|---|
-| `config/credentials.dat` | Encrypted shared account |
+| `config/credentials.properties` | Shared username and password, saved without encryption |
 | `config/portal.properties` | Shared External / Internal mode |
 | `modules/approve` | `settings.csv` containing search conditions and description |
 | `modules/approve-ref` | `settings.csv`, `Ref_No.csv`, and task logs |
@@ -95,7 +97,7 @@ Open the project in NetBeans and select Build / Run (F6), or run these commands 
 
 A JDK 8 or later is required. Pass `-JdkHome 'C:\path\to\jdk'` when `JAVA_HOME` does not point to the JDK you want to use. Builds use stable JAR filenames and read the version from `version.properties`. See [RELEASE.md](RELEASE.md) for versioning and GitHub release instructions.
 
-Tests use synthetic accounts to check encryption, migration, settings, updates, process locks, and all four tool windows. Chrome tests use local pages and generated PDFs to check case matching, native filtered data, checked pagination, exact selection, FBOQ eligibility, TK07 decisions, and confirmation failures. Pass `-SkipBrowsers` to skip driver preparation and Chrome startup. Reports and screenshots are written to `build/test-reports`.
+Tests use synthetic accounts to check plaintext storage, migration, settings, updates, process locks, and all four tool windows. Chrome tests use local pages and generated PDFs to check case matching, native filtered data, checked pagination, exact selection, FBOQ eligibility, TK07 decisions, and confirmation failures. Pass `-SkipBrowsers` to skip driver preparation and Chrome startup. Reports and screenshots are written to `build/test-reports`.
 
 Actual Internal portal checks through VPN were read-only: lowercase and uppercase Search found the same 45 pending matches; one exact reference had four Services-only FBOQ rows; TK07 had no pending matches at the time of the check. No real requests were approved, rejected, or deleted during testing. Local fixtures and read-only previews do not establish a successful production approval run.
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.3 — 2026-10-14
+
+- Save the shared username and password as UTF-8 plaintext in `config/credentials.properties`. Remove DPAPI and PowerShell from account storage; clearly disclose the unencrypted file in account and tool settings.
+- On first startup after updating, delete the old `config/credentials.dat` without reading or decrypting it, clear stale module account fields, and ask the user to enter the account again. Keep any existing plaintext account and all portal/task preferences.
+- Preserve the old account if installation rolls back; perform cleanup only when the new application starts. Later updates retain the plaintext account. Release packages and Git exclude personal account files.
+- Verify plaintext Unicode/punctuation round trips, invalid-file handling, account editing, upgrade cleanup, rollback preservation, and subsequent-update account retention using synthetic data.
+
 ## 1.1.2 — 2026-10-13
 
 - Redesign the shared account dialog with a clear saved-account state, larger fields, and Show password beside the Password heading.

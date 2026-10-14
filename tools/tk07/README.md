@@ -1,6 +1,6 @@
 # TK07 Review
 
-This managed module uses the Toolkit's encrypted shared account, shared ChromeDriver, selected External/Internal portal, and `settings.csv` preferences:
+This managed module uses the Toolkit's plaintext shared account, shared ChromeDriver, selected External/Internal portal, and `settings.csv` preferences:
 
 - `Search` (required, at most two non-empty terms separated by `&&`)
 - `Description_Approve` (optional)

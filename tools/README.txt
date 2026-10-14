@@ -1,7 +1,7 @@
 TrueOps Toolkit module sources
 =============================
 
-Version 1.1.2 includes an English launcher and English interfaces for four PROMS tools.
+Version 1.1.3 includes an English launcher and English interfaces for four PROMS tools.
 
 approve     Approve PROMS      TrueOps-Approve.jar
 approve-ref Approve by Ref     TrueOps-ApproveByRef.jar
@@ -42,7 +42,10 @@ The 1.0.0 update validator requires the retired TUAR files; those installations
 need one manual application-file upgrade while retaining their personal data.
 Changes made in the four PROMS runtime module folders are retained across builds.
 Use the shared account dialog for every login. Username and password are
-protected together with Windows DPAPI and are never saved in settings.csv.
+saved without encryption in config/credentials.properties, not settings.csv.
+Anyone with access to that file can read the account. The first startup after
+an upgrade deletes the old credentials.dat without decrypting it and requires
+entering the account again. Later updates preserve the plaintext account.
 Legacy Login.txt preferences inside Toolkit module folders migrate or remain
 as a preferences backup; existing current settings remain authoritative.
 Change task settings and PROMS reference lists through the module window.
@@ -70,7 +73,7 @@ reports scanned, matched, approved, skipped, and failed counts, with explicit
 no-match and partial-failure results. Unconfirmed submissions are not retried
 automatically; review the reference in PROMS before retrying.
 Saved values are kept in dist/modules/<id> (or the selected data path), not seed/.
-The shared encrypted account is kept in dist/config/credentials.dat.
+The shared plaintext account is kept in dist/config/credentials.properties.
 Portal settings select External or Internal for all four tools. The mode is
 stored in dist/config/portal.properties and loaded again before each run.
 External uses https://proms.truecorp.co.th/proms/login/.

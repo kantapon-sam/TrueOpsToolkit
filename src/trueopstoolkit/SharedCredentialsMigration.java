@@ -6,17 +6,22 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 
-/** Import before removing legacy credentials. Never writes a plaintext backup. */
+/** Retire encrypted accounts without decryption; consolidate older plaintext module accounts. */
 public final class SharedCredentialsMigration {
     private SharedCredentialsMigration() { }
 
-    public static void migrate(Path home) throws IOException {migrate(home,null);}
+    public static boolean migrate(Path home) throws IOException {return migrate(home,null);}
 
-    static void migrate(Path home,Path tools) throws IOException {
+    static boolean migrate(Path home,Path tools) throws IOException {
         Optional<SharedCredentials.Credentials> existing=SharedCredentials.load(home);
-        if(existing.isPresent()) {
-            existing.get().close();
-        } else {
+        boolean hasSavedAccount=existing.isPresent();
+        if(hasSavedAccount)existing.get().close();
+        // Do not decrypt an old account or resurrect a stale module account during upgrade.
+        if(Files.exists(SharedCredentials.encryptedFile(home))) {
+            cleanLegacy(home,tools);
+            return SharedCredentials.removeEncryptedAccount(home);
+        }
+        if(!hasSavedAccount) {
             Object[] legacy=null;
             for(Path directory:directories(home,null)) {
                 legacy=readDirectoryAccount(directory);
@@ -25,12 +30,12 @@ public final class SharedCredentialsMigration {
             if(legacy==null && tools!=null)for(String module:new String[]{"approve","approve-ref","delete","tk07"}) {
                 legacy=readDirectoryAccount(tools.resolve(module).resolve("seed"));if(legacy!=null)break;
             }
-            if(legacy==null)return;
+            if(legacy==null)return false;
             char[] password=(char[])legacy[1];
             try {
                 SharedCredentials.save(home,(String)legacy[0],password);
                 Optional<SharedCredentials.Credentials> verified=SharedCredentials.load(home);
-                if(!verified.isPresent())throw new IOException("Could not verify the encrypted account. The original data has been retained.");
+                if(!verified.isPresent())throw new IOException("Could not verify the saved account. The original data has been retained.");
                 try(SharedCredentials.Credentials credentials=verified.get()) {
                     char[] actual=credentials.copyPassword();
                     try {if(!credentials.getUsername().equals(legacy[0]) || !Arrays.equals(password,actual))throw new IOException("Account migration verification failed. The original data has been retained.");}
@@ -39,6 +44,7 @@ public final class SharedCredentialsMigration {
             } finally {Arrays.fill(password,'\0');Arrays.fill(legacy,null);}
         }
         cleanLegacy(home,tools);
+        return false;
     }
 
     static void cleanLegacy(Path home,Path tools) throws IOException {
@@ -95,10 +101,11 @@ public final class SharedCredentialsMigration {
             FileLock launcherLock=launcher.tryLock();if(launcherLock==null)throw new IOException("Close the Toolkit launcher before migrating account settings.");
             FileLock lock=channel.tryLock();if(lock==null)throw new IOException("Close the active module before migrating account settings.");
             try {
-                migrate(home,args.length==4?Paths.get(args[3]).toAbsolutePath():null);
+                boolean cleared=migrate(home,args.length==4?Paths.get(args[3]).toAbsolutePath():null);
                 SettingsFiles.migrate(home);
                 Optional<SharedCredentials.Credentials> account=SharedCredentials.load(home);
                 if(account.isPresent()){account.get().close();System.out.println("Shared account migration completed; legacy credentials removed, no credential values logged.");}
+                else if(cleared)System.out.println("Old encrypted account removed without decryption. Enter the account again in Shared account; new accounts are saved without encryption.");
                 else System.out.println("No complete account to import. Set the shared account in the application; legacy cleanup is pending until then.");
             }
             finally {lock.release();launcherLock.release();}

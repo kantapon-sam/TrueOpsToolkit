@@ -25,7 +25,7 @@ public final class SharedCredentialsMigrationTest {
             byte[] tuarPrefs=Files.readAllBytes(prefs),tuarAccount=Files.readAllBytes(old),tuarLegacy=Files.readAllBytes(tuarLogin),tuarSettings=Files.readAllBytes(tuarCsv),tuarSeedBytes=Files.readAllBytes(tuarSeed);
             SharedCredentialsMigration.migrate(home,tools);
             try(SharedCredentials.Credentials account=SharedCredentials.load(home).get()) {
-                char[] password=account.copyPassword();try{check("current-user".equals(account.getUsername()) && Arrays.equals(password,"current-secret,ไทย".toCharArray()),"current settings account imported and encrypted before the old filename is removed");}finally{Arrays.fill(password,'\0');}
+                char[] password=account.copyPassword();try{check("current-user".equals(account.getUsername()) && Arrays.equals(password,"current-secret,ไทย".toCharArray()),"current settings account imported and saved before the old filename is removed");}finally{Arrays.fill(password,'\0');}
             }
             for(String id:new String[]{"approve","approve-ref","delete"}) {
                 String runtime=read(home.resolve("modules/"+id+"/Login.txt")),seed=read(tools.resolve(id+"/seed/Login.txt"));
@@ -35,21 +35,38 @@ public final class SharedCredentialsMigrationTest {
             check(!read(home.resolve("modules/approve/settings.csv")).contains("Password,") && read(home.resolve("modules/approve/settings.csv")).contains("Description,current,comma"),"credentials removed from current preferences without losing comma values");
             check(!read(tools.resolve("approve/seed/settings.csv")).contains("User,") && read(tools.resolve("approve/seed/settings.csv")).contains("Description,current seed"),"current seed preferences are also cleaned");
             SettingsFiles.migrate(home);
-            for(String id:new String[]{"approve","approve-ref","delete"})check(!Files.exists(home.resolve("modules/"+id+"/Login.txt")) && Files.isRegularFile(home.resolve("modules/"+id+"/settings.csv")),"encrypted account migration permits the settings filename change: "+id);
+            for(String id:new String[]{"approve","approve-ref","delete"})check(!Files.exists(home.resolve("modules/"+id+"/Login.txt")) && Files.isRegularFile(home.resolve("modules/"+id+"/settings.csv")),"shared account migration permits the settings filename change: "+id);
             check(read(home.resolve("modules/approve/settings-legacy.csv")).contains("Description,ทดสอบ,comma") && !read(home.resolve("modules/approve/settings-legacy.csv")).contains("Password,"),"conflicting settings backup contains preferences only");
             check(Arrays.equals(tuarPrefs,Files.readAllBytes(prefs)) && Arrays.equals(tuarAccount,Files.readAllBytes(old)) && Arrays.equals(tuarLegacy,Files.readAllBytes(tuarLogin)) && Arrays.equals(tuarSettings,Files.readAllBytes(tuarCsv)) && Arrays.equals(tuarSeedBytes,Files.readAllBytes(tuarSeed)),"the separate TUAR application's account and files are untouched");
-            byte[] encrypted=Files.readAllBytes(SharedCredentials.file(home));SharedCredentialsMigration.migrate(home,tools);
+            byte[] savedAccount=Files.readAllBytes(SharedCredentials.file(home));SharedCredentialsMigration.migrate(home,tools);
             SettingsFiles.migrate(home);
-            check(Arrays.equals(encrypted,Files.readAllBytes(SharedCredentials.file(home))),"migration is idempotent");
+            check(Arrays.equals(savedAccount,Files.readAllBytes(SharedCredentials.file(home))),"migration is idempotent");
             write(home.resolve("modules/approve/Login.txt"),"User,stale-user\nPassword,stale-secret\nSearch,SAMPLE\n");
             write(home.resolve("modules/approve/settings.csv"),"User,current-recovery\nPassword,current-recovery-secret\nSearch,KEEP\n");
-            byte[] damaged=encrypted.clone();damaged[damaged.length-1]^=1;Files.write(SharedCredentials.file(home),damaged);
+            byte[] damaged="unsupported-format".getBytes(StandardCharsets.UTF_8);Files.write(SharedCredentials.file(home),damaged);
             boolean rejected=false;try{SharedCredentialsMigration.migrate(home,tools);}catch(IOException expected){rejected=true;}
             check(rejected && read(home.resolve("modules/approve/Login.txt")).contains("stale-secret") && read(home.resolve("modules/approve/settings.csv")).contains("current-recovery-secret"),"failed vault validation keeps both legacy and current data for recovery");
             check(Arrays.equals(damaged,Files.readAllBytes(SharedCredentials.file(home))),"failed migration never overwrites damaged vault");
             Path separateOnly=temporary.resolve("separate-tuar-only");write(separateOnly.resolve("modules/tuar/Login.txt"),"User,separate-only\nPassword,separate-only-secret\n");write(separateOnly.resolve("modules/tuar/User/login.properties"),"username=separate-only\npassword=separate-only-secret\n");
             SharedCredentialsMigration.migrate(separateOnly);SettingsFiles.migrate(separateOnly);
             check(!Files.exists(SharedCredentials.file(separateOnly)) && read(separateOnly.resolve("modules/tuar/Login.txt")).contains("separate-only-secret") && Files.exists(separateOnly.resolve("modules/tuar/User/login.properties")),"TUAR cannot supply a fallback account and its files are not renamed");
+            Path upgrade=temporary.resolve("upgrade-from-dpapi");
+            write(SharedCredentials.encryptedFile(upgrade),"synthetic DPAPI blob, deliberately not decryptable");
+            write(upgrade.resolve("modules/approve/Login.txt"),"User,stale-user\nPassword,stale-secret\nSearch,KEEP\n");
+            write(upgrade.resolve("config/portal.properties"),"mode=INTERNAL\n");
+            check(SharedCredentialsMigration.migrate(upgrade),"upgrade reports that the old encrypted account was cleared");
+            SettingsFiles.migrate(upgrade);
+            check(!Files.exists(SharedCredentials.encryptedFile(upgrade)) && !SharedCredentials.load(upgrade).isPresent(),"upgrade clears the encrypted account without importing stale credentials");
+            check(read(upgrade.resolve("modules/approve/settings.csv")).contains("Search,KEEP") && !read(upgrade.resolve("modules/approve/settings.csv")).contains("Password,"),"upgrade preserves task preferences and removes stale passwords");
+            check(read(upgrade.resolve("config/portal.properties")).equals("mode=INTERNAL\n"),"upgrade preserves the selected portal");
+            check(!SharedCredentialsMigration.migrate(upgrade),"reopening does not repeat the account-reset notification");
+            SharedCredentials.save(upgrade,"new-user","new-secret".toCharArray());
+            byte[] savedPlaintext=Files.readAllBytes(SharedCredentials.file(upgrade));
+            write(SharedCredentials.encryptedFile(upgrade),"synthetic leftover from an older installation");
+            check(SharedCredentialsMigration.migrate(upgrade),"leftover encrypted file is also retired when a new account exists");
+            check(Arrays.equals(savedPlaintext,Files.readAllBytes(SharedCredentials.file(upgrade))),"cleanup preserves the new plaintext account byte for byte");
+            SharedCredentialsMigration.migrate(upgrade);
+            check(Arrays.equals(savedPlaintext,Files.readAllBytes(SharedCredentials.file(upgrade))),"later startups preserve the saved plaintext account");
             System.out.println("SHARED CREDENTIAL MIGRATION PASS");
         } finally {try(Stream<Path> paths=Files.walk(temporary)){for(Path path:(Iterable<Path>)paths.sorted(Comparator.reverseOrder())::iterator)Files.deleteIfExists(path);}}
     }

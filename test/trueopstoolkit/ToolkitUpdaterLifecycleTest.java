@@ -75,6 +75,14 @@ public final class ToolkitUpdaterLifecycleTest {
         check(!Files.exists(fixture.pending.directory.resolve("release.zip")), "Successful update clears downloaded archive");
         check(!ToolkitUpdateManager.isInstallPending(home), "Successful update clears handoff marker");
         check(read(home.resolve("config/credentials.dat")).equals("synthetic encrypted vault"), "Shared account file is preserved");
+        check(SharedCredentialsMigration.migrate(home), "Reopened application clears the old encrypted account after successful installation");
+        check(!Files.exists(home.resolve("config/credentials.dat")) && !SharedCredentials.load(home).isPresent(), "First upgrade requires account entry again without decrypting old data");
+        SharedCredentials.save(home,"synthetic-new-account","synthetic-new-secret".toCharArray());
+        byte[] saved=Files.readAllBytes(SharedCredentials.file(home));
+        Fixture next=fixture(home);
+        check(ToolkitUpdater.runUpdate(next.pending, home, "123", new RecordingProgress(), new Services()), "Later installation succeeds with plaintext credentials present");
+        SharedCredentialsMigration.migrate(home);
+        check(java.util.Arrays.equals(saved,Files.readAllBytes(SharedCredentials.file(home))), "Later updates preserve the plaintext account");
     }
 
     private static void rollbackDoesNotRestart(Path home) throws Exception {
@@ -87,6 +95,7 @@ public final class ToolkitUpdaterLifecycleTest {
         check(progress.contains("Restoring") && progress.contains("restored"), "Rollback status is visible");
         check(read(home.resolve("TrueOpsToolkit.jar")).equals("old application"), "Old launcher is restored");
         check("1.0.0".equals(readVersion(home)), "Old version is restored");
+        check(read(home.resolve("config/credentials.dat")).equals("synthetic encrypted vault"), "Failed installation retains the old account for rollback");
         check(Files.isRegularFile(fixture.pending.directory.resolve("release.zip")), "Failed install keeps verified recovery stage");
         check(!ToolkitUpdateManager.isInstallPending(home), "Failed installer clears its marker");
     }

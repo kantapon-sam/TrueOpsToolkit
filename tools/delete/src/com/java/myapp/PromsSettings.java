@@ -90,7 +90,7 @@ final class PromsSettings {
                 try {
                     ((AutoCloseable) credentials).close();
                 } catch (Exception ignored) {
-                    // The vault releases its temporary decrypted password buffer.
+                    // Closing the account clears its temporary password buffer.
                 }
             }
         }

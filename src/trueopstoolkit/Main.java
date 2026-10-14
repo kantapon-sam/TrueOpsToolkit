@@ -280,21 +280,31 @@ public final class Main extends JFrame {
         instanceLock=instanceChannel.tryLock();
         if(instanceLock==null){JOptionPane.showMessageDialog(null,"TrueOps Toolkit is already open. Please use the existing window.");instanceChannel.close();return;}
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {try{instanceLock.release();instanceChannel.close();}catch(Exception ignored){}},"launcher-lock"));
+        boolean accountNeedsSetup=false;
         try(FileChannel channel=FileChannel.open(home.resolve(".active.lock"),StandardOpenOption.CREATE,StandardOpenOption.WRITE)) {
             FileLock migrationLock=channel.tryLock();
             if(migrationLock!=null)try{
                 try {RetiredModules.archiveTuar(home);}
                 catch(IOException failure){JOptionPane.showMessageDialog(null,"Could not finish archiving legacy TUAR files. The recovery data has been kept.\n"+failure.getMessage(),"Toolkit cleanup",JOptionPane.WARNING_MESSAGE);}
-                SharedCredentialsMigration.migrate(home);SettingsFiles.migrate(home);
+                boolean accountCleared=SharedCredentialsMigration.migrate(home);SettingsFiles.migrate(home);
+                accountNeedsSetup=accountCleared && !Files.exists(SharedCredentials.file(home));
             }finally{migrationLock.release();}
         } catch(IOException ex){JOptionPane.showMessageDialog(null,"Could not migrate the existing account or settings. Open Shared account or tool settings to review them.\n"+ex.getMessage(),"Account and settings",JOptionPane.WARNING_MESSAGE);}
         final ModuleSpec requested=args.length==2 && "--module".equals(args[0])?ModuleSpec.byId(args[1]):null;
         final boolean reopened=args.length==2 && "--updated".equals(args[0]) && AppVersion.current().equals(args[1]);
+        final boolean notifyAccountReset=accountNeedsSetup;
         SwingUtilities.invokeLater(() -> {
-            Main frame=new Main(home,null);frame.reopenedAfterUpdate=reopened;frame.setVisible(true);
-            if(reopened)ToolkitUpdateManager.reportReopened(home,AppVersion.current());
+            Main frame=new Main(home,null);frame.showLauncher(reopened,notifyAccountReset);
             if(requested!=null)frame.requestModule(requested);
         });
+    }
+    void showLauncher(boolean reopened,boolean notifyAccountReset) {
+        reopenedAfterUpdate=reopened;setVisible(true);
+        // A modal account notice must not hold up the installer's readiness handshake.
+        if(reopened)ToolkitUpdateManager.reportReopened(home,AppVersion.current());
+        if(notifyAccountReset)JOptionPane.showMessageDialog(this,
+                "The old encrypted account has been removed.\nOpen Shared account and enter your username and password again.\nNew accounts are saved without encryption.",
+                "Shared account update",JOptionPane.INFORMATION_MESSAGE);
     }
     private static void smoke(Path home,Path report) throws Exception {
         if(ProcessController.busy(home))throw new IOException("Close active module before UI tests.");

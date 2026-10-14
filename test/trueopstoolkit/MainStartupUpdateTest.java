@@ -37,8 +37,43 @@ public final class MainStartupUpdateTest {
             testCloseWhileDriverWorks(work.resolve("close"));
             testUpdateNowRace(work.resolve("race"));
             testSmokeSkipsChecksAndRealDialog(work.resolve("smoke"));
+            testAccountResetAcknowledgesBeforeNotice(work.resolve("account-reset"));
             System.out.println("PASS: startup updates ("+checks+" checks): both automatic checks, locking, independent failures, close cleanup, update choices, and smoke isolation.");
         } finally {ToolkitUpdater.deleteTree(work);}
+    }
+
+    private static void testAccountResetAcknowledgesBeforeNotice(Path home) throws Exception {
+        Files.createDirectories(home.resolve("config"));
+        Files.write(SharedCredentials.encryptedFile(home),"synthetic old encrypted account".getBytes("UTF-8"));
+        boolean cleared=SharedCredentialsMigration.migrate(home);
+        check(cleared && !Files.exists(SharedCredentials.encryptedFile(home)),"Upgrade clears the encrypted account before the new launcher opens");
+        String previous=System.getProperty(ToolkitUpdateManager.REOPEN_TOKEN_PROPERTY);
+        String token="12345678-1234-1234-1234-123456789abc";
+        System.setProperty(ToolkitUpdateManager.REOPEN_TOKEN_PROPERTY,token);
+        long launchedAt=System.currentTimeMillis();
+        AtomicReference<Main> holder=new AtomicReference<>();
+        CountDownLatch noticeClosed=new CountDownLatch(1);
+        SwingUtilities.invokeLater(()->{
+            try {
+                Main frame=new Main(home,home.resolve("offline-smoke"));holder.set(frame);
+                frame.showLauncher(true,cleared);
+            } finally {noticeClosed.countDown();}
+        });
+        try {
+            waitUntil(()->Files.exists(home.resolve(ToolkitUpdateManager.REOPEN_ACK)),"Reopened acknowledgement is written while the account-reset notice waits");
+            check(ToolkitUpdateManager.hasReopened(home,AppVersion.current(),token,launchedAt),"Installer accepts the acknowledgement without dismissing the account notice");
+            SwingUtilities.invokeAndWait(()->{
+                Main frame=holder.get();check(frame.isShowing(),"The main window is visible before the account notice");
+                JDialog notice=null;
+                for(Window owned:frame.getOwnedWindows())if(owned instanceof JDialog && owned.isShowing() && "Shared account update".equals(((JDialog)owned).getTitle()))notice=(JDialog)owned;
+                check(notice!=null && noticeClosed.getCount()==1,"The account-reset notice remains visible without blocking the installer");
+                notice.dispose();
+            });
+            await(noticeClosed,"Account notice closes normally");
+        } finally {
+            if(holder.get()!=null)cleanup(holder.get());
+            if(previous==null)System.clearProperty(ToolkitUpdateManager.REOPEN_TOKEN_PROPERTY);else System.setProperty(ToolkitUpdateManager.REOPEN_TOKEN_PROPERTY,previous);
+        }
     }
 
     private static void testAutomaticChecksAndLater(Path home) throws Exception {

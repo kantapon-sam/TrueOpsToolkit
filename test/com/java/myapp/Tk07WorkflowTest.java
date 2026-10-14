@@ -160,10 +160,10 @@ public final class Tk07WorkflowTest {
             store.getMethod("save", Path.class, String.class, char[].class).invoke(null, home, "synthetic-tk07-account", secret);
             System.setProperty("trueops.home", home.toString());
             Tk07Settings shared = Tk07Settings.read(settings);
-            equal("synthetic-tk07-account", shared.username(), "TK07 reads the encrypted shared username");
-            equal("synthetic-tk07-secret", shared.password(), "TK07 reads the encrypted shared password");
-            String ciphertext = new String(Files.readAllBytes(home.resolve("config/credentials.dat")), StandardCharsets.UTF_8);
-            check(!ciphertext.contains("synthetic-tk07-account") && !ciphertext.contains("synthetic-tk07-secret"), "shared account is absent from plaintext vault bytes");
+            equal("synthetic-tk07-account", shared.username(), "TK07 reads the shared username");
+            equal("synthetic-tk07-secret", shared.password(), "TK07 reads the shared password");
+            String plaintext = new String(Files.readAllBytes(home.resolve("config/credentials.properties")), StandardCharsets.UTF_8);
+            check(plaintext.contains("synthetic-tk07-account") && plaintext.contains("synthetic-tk07-secret"), "TK07 uses the plaintext shared account");
             store.getMethod("save", Path.class, String.class, char[].class).invoke(null, home, "updated-shared-account", "updated-shared-secret".toCharArray());
             equal("updated-shared-account", Tk07Settings.read(settings).username(), "next TK07 run reloads the latest shared account");
         } finally {

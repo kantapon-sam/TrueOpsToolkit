@@ -80,6 +80,7 @@ public final class ToolkitUpdateManagerTest {
             fails(() -> ToolkitUpdateManager.validateDownloadUrl(new URL(address)), "Untrusted download URL");
         }
         check(!ToolkitUpdater.managedFile("config/credentials.dat"), "Credential vault is outside managed paths");
+        check(!ToolkitUpdater.managedFile("config/credentials.properties"), "Plaintext account is outside managed update paths");
         check(!ToolkitUpdater.managedFile("modules/approve/Login.txt"), "Login settings are outside managed paths");
         check(!ToolkitUpdater.managedFile("modules/approve/settings.csv"), "Current module settings are outside managed paths");
         check(!ToolkitUpdater.managedFile("drivers/chromedriver.exe"), "Driver is outside managed paths");
@@ -277,7 +278,7 @@ public final class ToolkitUpdateManagerTest {
 
     private static Map<String, byte[]> userData() {
         Map<String, byte[]> result = new LinkedHashMap<String, byte[]>();
-        for (String name : new String[] { "config/credentials.dat", "config/other.properties", "User", "attachments/local.txt", "logs/work.log",
+        for (String name : new String[] { "config/credentials.dat", "config/credentials.properties", "config/other.properties", "User", "attachments/local.txt", "logs/work.log",
                 "Run-TrueOpsToolkit.cmd", "user-scripts/local-task.bat",
                 "drivers/chromedriver.exe", "modules/tuar/requests.xlsx", "modules/tuar/config/settings.properties", "modules/tuar/attachments/local.txt",
                 "modules/approve/Login.txt", "modules/approve-ref/Login.txt", "modules/approve-ref/Ref_No.csv", "modules/delete/Login.txt",

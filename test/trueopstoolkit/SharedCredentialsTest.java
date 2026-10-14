@@ -10,13 +10,9 @@ import java.util.Comparator;
 import java.util.Locale;
 import java.util.stream.Stream;
 
-/** Real Windows DPAPI with synthetic account values only; no network or actual accounts. */
+/** Plaintext account persistence with synthetic values only; no network or actual accounts. */
 public final class SharedCredentialsTest {
     public static void main(String[] args) throws Exception {
-        if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
-            System.out.println("SHARED CREDENTIALS SKIPPED: Windows DPAPI required");
-            return;
-        }
         Path home = Files.createTempDirectory("trueops-vault-test-");
         char[] password = " synthetic, secret ไทย \uD83D\uDD10 $'\" ".toCharArray();
         String username = "synthetic-user,ทดสอบ\uD83D\uDE80";
@@ -27,10 +23,9 @@ public final class SharedCredentialsTest {
             check(Arrays.equals(password, " synthetic, secret ไทย \uD83D\uDD10 $'\" ".toCharArray()), "save does not mutate caller password");
             Path vault = SharedCredentials.file(home);
             byte[] first = Files.readAllBytes(vault);
-            check(!contains(first, username.getBytes(StandardCharsets.UTF_8)), "username is encrypted");
-            check(!contains(first, new String(password).getBytes(StandardCharsets.UTF_8)), "password is encrypted");
-            check(!contains(first, username.getBytes(StandardCharsets.UTF_16LE)), "username absent in UTF-16 ciphertext");
-            check(!contains(first, new String(password).getBytes(StandardCharsets.UTF_16LE)), "password absent in UTF-16 ciphertext");
+            check(vault.getFileName().toString().equals("credentials.properties"), "shared account uses the new plaintext file");
+            check(contains(first, username.getBytes(StandardCharsets.UTF_8)), "username is readable UTF-8 text");
+            check(contains(first, "synthetic, secret ไทย".getBytes(StandardCharsets.UTF_8)), "password is stored without encryption");
             assertAccount(home, username, password);
 
             SharedCredentials.Credentials credentials = SharedCredentials.load(home).get();
@@ -47,17 +42,16 @@ public final class SharedCredentialsTest {
             credentials.close();
             Arrays.fill(copied, '\0');
 
-            byte[] tampered = first.clone();
-            tampered[tampered.length - 1] ^= 1;
+            byte[] tampered = "format=unknown\nusername=synthetic\npassword=synthetic\n".getBytes(StandardCharsets.UTF_8);
             Files.write(vault, tampered);
             expectFailure(() -> SharedCredentials.load(home));
             expectFailure(() -> SharedCredentials.save(home, username, password));
-            check(Arrays.equals(tampered, Files.readAllBytes(vault)), "tampering is rejected and never silently overwritten");
+            check(Arrays.equals(tampered, Files.readAllBytes(vault)), "unsupported format is rejected and never silently overwritten");
             Files.write(vault, first);
 
             char[] oversized = new char[8193];
             expectFailure(() -> SharedCredentials.save(home, username, oversized));
-            check(Arrays.equals(first, Files.readAllBytes(vault)), "invalid save preserves existing ciphertext");
+            check(Arrays.equals(first, Files.readAllBytes(vault)), "invalid save preserves the existing account");
 
             for (String invalid : new String[]{"", " \t ", "\u00A0\u2003", "a\rb", "a\nb", "a\0b"}) {
                 expectFailure(() -> SharedCredentials.save(home, invalid, password));
@@ -67,19 +61,39 @@ public final class SharedCredentialsTest {
             expectFailure(() -> SharedCredentials.save(home, null, password));
             expectFailure(() -> SharedCredentials.save(home, username, null));
 
+            if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
             Files.setAttribute(vault, "dos:readonly", true);
             try {
                 expectFailure(() -> SharedCredentials.save(home, "replacement-user", "replacement-secret".toCharArray()));
                 check(Arrays.equals(first, Files.readAllBytes(vault)), "failed replacement preserves previous vault");
             } finally { Files.setAttribute(vault, "dos:readonly", false); }
+            }
             assertAccount(home, username, password);
             checkOnlyVault(home);
 
             SharedCredentials.save(home, username, password);
-            byte[] second = Files.readAllBytes(vault);
-            check(!Arrays.equals(first, second), "DPAPI randomizes repeated encryption");
             assertAccount(home, username, password);
             checkOnlyVault(home);
+
+            String punctuation="  :equals=slash\\hash#!\tไทย\uD83D\uDD10  ";
+            SharedCredentials.save(home, username, punctuation.toCharArray());
+            assertAccount(home, username, punctuation.toCharArray());
+            Path copiedHome=Files.createTempDirectory(home,"copied-");
+            Files.createDirectories(SharedCredentials.file(copiedHome).getParent());
+            Files.copy(vault,SharedCredentials.file(copiedHome));
+            assertAccount(copiedHome,username,punctuation.toCharArray());
+            for(byte[] invalid:new byte[][] {
+                    "format=TRUEOPS-CREDENTIALS-PLAIN-1\nusername=synthetic\n".getBytes(StandardCharsets.UTF_8),
+                    "format=TRUEOPS-CREDENTIALS-PLAIN-1\nusername=synthetic\npassword=\\uNOPE\n".getBytes(StandardCharsets.UTF_8),
+                    new byte[]{(byte)0xc3,(byte)0x28},new byte[131073]}) {
+                Files.write(vault,invalid);expectFailure(()->SharedCredentials.load(home));
+            }
+            Files.write(vault,first);
+            Files.write(SharedCredentials.encryptedFile(home),"synthetic-old-encrypted-account".getBytes(StandardCharsets.UTF_8));
+            expectFailure(()->SharedCredentials.save(home,username,new char[0]));
+            check(Files.exists(SharedCredentials.encryptedFile(home)),"failed save retains the old account");
+            SharedCredentials.save(home,username,password);
+            check(!Files.exists(SharedCredentials.encryptedFile(home)),"successful save clears the old encrypted account without reading it");
 
             SharedCredentials.delete(home);
             SharedCredentials.delete(home);
@@ -106,7 +120,7 @@ public final class SharedCredentialsTest {
 
     private static void checkOnlyVault(Path home) throws Exception {
         try (Stream<Path> files = Files.list(home.resolve("config"))) {
-            check(files.count() == 1, "only encrypted vault remains after atomic save");
+            check(files.count() == 1, "only the plaintext account remains after atomic save");
         }
     }
 

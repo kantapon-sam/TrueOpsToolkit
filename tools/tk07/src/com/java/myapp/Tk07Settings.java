@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** Preferences contain no credentials; the Toolkit's Windows vault supplies the shared account. */
+/** Preferences contain no credentials; the Toolkit's shared account file supplies the login. */
 final class Tk07Settings {
     private final Map<String, String> preferences;
     private String username;
@@ -49,7 +49,7 @@ final class Tk07Settings {
 
     private void readSharedAccount() throws IOException {
         String configured = System.getProperty("trueops.home", "").trim();
-        if (configured.isEmpty()) throw new IOException("Open TK07 Review from TrueOps Toolkit to use the encrypted shared account.");
+        if (configured.isEmpty()) throw new IOException("Open TK07 Review from TrueOps Toolkit to use the shared account.");
         Object credentials = null;
         char[] secret = null;
         try {

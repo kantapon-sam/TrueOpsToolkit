@@ -25,7 +25,7 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
-/** Real dialog and Windows vault, using isolated synthetic credentials only. */
+/** Real account dialog with isolated synthetic credentials only. */
 public final class SharedCredentialsDialogTest {
     private static int checks;
     private static final String DEMO_PASSWORD="Demo-only-123!";
@@ -55,6 +55,7 @@ public final class SharedCredentialsDialogTest {
             check(Arrays.equals(DEMO_PASSWORD.toCharArray(),field.getPassword()),"Saved password is actually loaded, not placeholder dots");
             check(field.getEchoChar()=='\u2022',"Saved password is masked by default");
             check(!show(session.dialog).isSelected(),"Show password defaults off");
+            check(((javax.swing.JTextArea)named(session.dialog,"accountStorageNote")).getText().contains("without encryption"),"Account dialog discloses plaintext storage");
             snapshot(session.dialog,"shared-account-masked.png");
             show(session.dialog).doClick();
             check(field.getEchoChar()==0,"Show password reveals the saved value");
@@ -100,7 +101,7 @@ public final class SharedCredentialsDialogTest {
             check(Arrays.equals("Synthetic-new-password!".toCharArray(),account.copyPassword()),"Replacement password persisted");
         }
         String stored=new String(Files.readAllBytes(SharedCredentials.file(home)),StandardCharsets.UTF_8);
-        check(!stored.contains("Synthetic-new-password!")&&!stored.contains("demo.updated"),"Saved account remains encrypted");
+        check(stored.contains("Synthetic-new-password")&&stored.contains("demo.updated"),"Saved account is readable plaintext");
     }
 
     private static void blankDoesNotReplaceSavedPassword(Path home) throws Exception {
@@ -132,7 +133,7 @@ public final class SharedCredentialsDialogTest {
         });
         check(session.finish(),"New account saves through the same dialog");
         try(SharedCredentials.Credentials account=SharedCredentials.load(home).get()) {
-            check(Arrays.equals(DEMO_PASSWORD.toCharArray(),account.copyPassword()),"New account can be decrypted from the vault");
+            check(Arrays.equals(DEMO_PASSWORD.toCharArray(),account.copyPassword()),"New account can be loaded from the plaintext file");
         }
     }
 

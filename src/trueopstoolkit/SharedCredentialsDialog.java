@@ -50,18 +50,19 @@ public final class SharedCredentialsDialog {
             }
         } catch(IOException ex){accountState.setText("Account unavailable");passwordNote.setText("Cannot read the saved account. Remove it and save a new one.");}
         JPanel footer=new JPanel(new BorderLayout(0,14));footer.setOpaque(false);
-        footer.add(Ui.label("Saved securely for your Windows account. Changes apply to every tool.",12,Ui.MUTED,false),BorderLayout.NORTH);
+        JTextArea storageNote=Ui.note("Saved without encryption in config/credentials.properties.\nAnyone who can read this file can see your username and password.");
+        storageNote.setName("accountStorageNote");footer.add(storageNote,BorderLayout.NORTH);
         JPanel buttons=new JPanel(new BorderLayout(12,0));buttons.setOpaque(false);
         JPanel primary=new JPanel(new FlowLayout(FlowLayout.RIGHT,8,0));primary.setOpaque(false);
         JButton remove=new JButton("Remove saved account"),cancel=new JButton("Cancel"),save=Ui.button("Save shared account",Ui.NAVY);
-        remove.setEnabled(java.nio.file.Files.exists(SharedCredentials.file(home)));
+        remove.setEnabled(java.nio.file.Files.exists(SharedCredentials.file(home)) || java.nio.file.Files.exists(SharedCredentials.encryptedFile(home)));
         cancel.addActionListener(e -> dialog.dispose());
         save.addActionListener(e -> {
             char[] entered=password.getPassword();
             try {
                 SharedCredentials.save(home,username.getText().trim(),entered);
                 changed[0]=true;
-                // The vault is committed first; an interrupted cleanup never loses the account.
+                // The shared account is committed first; cleanup cannot lose the saved account.
                 SharedCredentialsMigration.cleanLegacy(home,null);changed[0]=true;dialog.dispose();
             } catch(IOException ex){Ui.showError(dialog,ex);}
             finally {Arrays.fill(entered,'\0');}
